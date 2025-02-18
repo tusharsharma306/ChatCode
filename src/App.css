@@ -1,0 +1,326 @@
+body {
+  /* Replace with your AI live view background image */
+ background-size: cover;
+ background-repeat: no-repeat;
+ background-attachment: fixed; /* Keeps the background fixed while scrolling */
+ margin: 0; /* Remove default margin to fill the entire viewport */
+ font-family: Arial, sans-serif; /* Use a common sans-serif font */
+ color: #f8f8f2;
+}
+
+.mainWrap {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: row;
+}
+
+.aside {
+  display: flex;
+  background: #1c1e29;
+  padding: 10px;
+  color: #fff;
+  flex-direction: column;
+  width: 13%;
+}
+
+.editorWrap {
+  display: grid;
+  padding: 10px;
+  width: 60%;
+  height: 100%;
+}
+
+.chatWrap {
+  display: grid;
+  flex-direction: column;
+  width: 25%;
+  height: 100%;
+}
+
+.asideInner {
+  flex: 1;
+}
+
+.logo {
+  border-bottom: 1px solid #424242;
+  padding-bottom: 1px;
+}
+
+.logoImage {
+  height: 60px;
+}
+
+.homePageWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  height: 100vh;
+}
+
+.formWrapper {
+  background: #282a36;
+  padding: 20px;
+  border-radius: 10px;
+  width: 400px;
+  max-width: 90%;
+}
+
+
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.mainLabel {
+  margin-bottom: 20px;
+  margin-top: 0;
+}
+
+.homePageLogo {
+  height: 80px;
+  margin-bottom: 30px;
+}
+
+.copyBtn {
+  background: white;
+}
+
+.btn,.clickedLabel,.notClickedLabel {
+  border: none;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  font-weight: bold;
+} 
+
+.joinBtn ,.leaveBtn , .runBtn{
+  background: #4aed88;
+  width: 100px;
+  margin-left: auto;
+}
+
+.joinBtn:hover , .leaveBtn:hover, .runBtn:hover {
+  background: #2b824c;
+
+}
+
+
+.createInfo {
+  margin: 0 auto;
+  margin-top: 20px;
+}
+
+.createNewBtn{
+  color: #4aed88;
+  text-decoration: none;
+  border-bottom: 1px solid #4aed88;
+  transition: all 0.3s ease-in-out;
+}
+
+.createNewBtn:hover{
+  color:#368654;
+  border-color: #368654;
+}
+
+.clientsList {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.client {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  font-weight: bold;
+}
+
+.userName {
+  margin-top: 10px;
+}
+
+.seLang {
+  border: none;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px; 
+  border-radius: 5px;
+  font-size: 11px; 
+  font-weight: bold;
+  text-align-last: center;
+  background-color: #f4f4f4; 
+  color: #333;
+}
+
+
+.leaveBtn , .runBtn{
+  width: 100%;
+  margin-top: 20px;
+}
+
+.copyBtn{
+  border: none;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: bold;
+  text-align-last: center;
+}
+
+.CodeMirror {
+  font-size: 14px;
+  line-height: 1.2;
+  min-height: calc(72vh);
+  width: 100%;
+}
+
+.IO-container {
+  display: flex;
+  justify-content: left;
+  min-height: calc(4vh);
+  width: 100%;
+}
+
+.inputArea {
+  font-size: 16px;
+  line-height: 1;
+  padding-top: 10px;
+  background-color: rgba(0, 0, 0, 0.401);
+  color: white;
+  font-size: 14px;
+  height: calc(15vh);
+  width: 100%;
+  resize: none;
+}
+
+.chatArea {
+  font-size: 16px;
+  line-height: 1;
+  padding-top: 10px;
+  background-color: #1c1e29;
+  color: white;
+  font-size: 14px;
+  border: 1px solid transparent;
+  min-height: calc(85vh);
+  height: calc(92vh);
+  overflow-y: auto;
+  resize: none;
+}
+
+.sendChatWrap {
+  display: flex;
+  height: calc(5vh);
+}
+
+
+
+.inputBox {
+  padding: 10px;
+  border-radius: 5px;
+  outline: none;
+  border: 5px;
+  margin-bottom: 14px;
+  background: #eee;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.send {
+  height: 20px; 
+  width: 20px;
+  margin-right: 5px; 
+}
+
+.sendBtn {
+  background-color: #fff; 
+  border: 1px solid #ccc; 
+  padding: 10px; 
+  border-radius: 5px; 
+  display: flex; 
+  align-items: center; 
+} 
+
+.clickedLabel {
+  background-color : #5e60ce; 
+  border: 1px solid transparent;
+  color: white;
+  padding: 10px 10px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 14px;
+  margin: 2px 2px;
+  cursor: pointer;
+  width: auto;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+}
+
+.notClickedLabel {
+  background-color:#bdbbe1;
+  border: 1px solid transparent;
+  color: white;
+  padding: 10px 10px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 14px;
+  margin: 2px 2px;
+  cursor: pointer;
+  width: auto;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+}
+
+.clickedLabel:hover,.notClickedLabel:hover{
+  opacity: 0.7;
+}
+
+.inputField {
+  background-color: rgb(255, 255, 255);
+  border: 5px solid transparent;
+  color: rgb(0, 0, 0);
+  padding: 5px 5px;
+  text-align: left;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 12px;
+  margin: 1px 1px;
+  margin-left: 5px;
+  margin-right: 5px;
+  width: 70%;
+}
+
+
+.textarea-style::-webkit-scrollbar {
+  width: 10px;
+ 
+}
+
+.textarea-style::-webkit-scrollbar-track {
+  background: #1c1e29;
+ 
+}
+
+.textarea-style::-webkit-scrollbar-thumb {
+  background: rgb(99, 92, 232);
+ 
+}
+
+
+.textarea-style::-webkit-scrollbar-thumb:hover {
+  background: rgb(189, 187, 225);
+  
+}

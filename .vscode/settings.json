@@ -1,0 +1,13 @@
+{
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "github.copilot.advanced": {
+    
+    },
+    "github.copilot.enable": {
+    
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    }
+}
