@@ -18,7 +18,7 @@ mongoose.connect(MONGODB_URI, {
 .catch((err) => console.error('MongoDB connection error:', err));
 
 app.use(cors({
-    origin: 'http://localhost:3000', 
+    origin: process.env.FRONTEND_URL, 
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -31,7 +31,7 @@ const ACTIONS = require('./src/pages/Action');
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: 'http://localhost:3000',
+        origin: process.env.FRONTEND_URL,
         methods: ['GET', 'POST'],
         credentials: true,
         allowedHeaders: ['Content-Type']
