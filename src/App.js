@@ -2,6 +2,7 @@ import './App.css';
 import {BrowserRouter,Routes,Route} from 'react-router-dom';
 import Home from './pages/Home';
 import EditorPage from './pages/EditorPage';
+import SharedView from './pages/SharedView';
 import {Toaster} from 'react-hot-toast'
 function App() {
   return (
@@ -27,6 +28,9 @@ function App() {
           <Route path="/editor/:roomId"
            element={<EditorPage/>}>
 
+           </Route>
+           <Route path="/share/:linkId"
+           element={<SharedView/>}>
            </Route>
 
         </Routes>

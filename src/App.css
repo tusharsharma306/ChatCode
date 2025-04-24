@@ -324,3 +324,89 @@ body {
   background: rgb(189, 187, 225);
   
 }
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #282a36;
+    padding: 20px;
+    border-radius: 8px;
+    width: 400px;
+    color: #f8f8f2;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.generated-link {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.share-btn {
+    background: #4aed88;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.share-btn:hover {
+    background: #2b824c;
+}
+
+.sharedViewWrapper {
+    height: 100vh;
+    padding: 20px;
+    background: #1c1e29;
+}
+
+.passwordProtected {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: #1c1e29;
+    color: #fff;
+    gap: 20px;
+}
+
+.passwordProtected input {
+    padding: 10px;
+    border-radius: 5px;
+    outline: none;
+    border: none;
+    margin-bottom: 14px;
+    background: #eee;
+    font-size: 16px;
+    width: 200px;
+}
+
+.passwordProtected button {
+    background: #4aed88;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+
+.passwordProtected button:hover {
+    background: #2b824c;
+}
