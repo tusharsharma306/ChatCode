@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 const Modal = ({ onClose, code }) => {
     const [isProtected, setIsProtected] = useState(false);
     const [password, setPassword] = useState('');
-    const [expiryTime, setExpiryTime] = useState('1h');
+    const [expiryTime, setExpiryTime] = useState('1h'); 
     const [generatedLink, setGeneratedLink] = useState('');
 
     const generateLink = async () => {
@@ -64,6 +64,7 @@ const Modal = ({ onClose, code }) => {
                         value={expiryTime}
                         onChange={(e) => setExpiryTime(e.target.value)}
                     >
+                        <option value= "15min">15 Minutes</option>
                         <option value="1h">1 Hour</option>
                         <option value="24h">24 Hours</option>
                         <option value="7d">7 Days</option>

@@ -118,6 +118,7 @@ app.post('/share', async (req, res) => {
         const { code, isProtected, password, expiryTime } = req.body;
 
         const expiryMap = {
+            '15min': 15 * 60 * 1000,
             '1h': 60 * 60 * 1000,
             '24h': 24 * 60 * 60 * 1000,
             '7d': 7 * 24 * 60 * 60 * 1000
