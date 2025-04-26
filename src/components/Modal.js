@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 const Modal = ({ onClose, code }) => {
     const [isProtected, setIsProtected] = useState(false);
     const [password, setPassword] = useState('');
-    const [expiryTime, setExpiryTime] = useState('1h'); 
+    const [expiryTime, setExpiryTime] = useState('15min'); 
     const [generatedLink, setGeneratedLink] = useState('');
 
     const generateLink = async () => {
