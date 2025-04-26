@@ -1,10 +1,9 @@
 body {
-  /* Replace with your AI live view background image */
  background-size: cover;
  background-repeat: no-repeat;
- background-attachment: fixed; /* Keeps the background fixed while scrolling */
- margin: 0; /* Remove default margin to fill the entire viewport */
- font-family: Arial, sans-serif; /* Use a common sans-serif font */
+ background-attachment: fixed;
+ margin: 0;
+ font-family: Arial, sans-serif; 
  color: #f8f8f2;
 }
 
