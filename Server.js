@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcrypt');
-const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 const CodeShare = require('./models/CodeShare');
 const app = express();
@@ -45,10 +44,8 @@ function getAllConnectedClients(roomId) {
         return {
             socketId,
             username: userSocketMap[socketId],
-
         };
     });
-
 }
 
 io.on('connection', (socket) => {
@@ -87,11 +84,9 @@ io.on('connection', (socket) => {
         });
     })
 
-
     socket.on(ACTIONS.SEND_MESSAGE, ({ roomId, message }) => {
         socket.broadcast.to(roomId).emit(ACTIONS.SEND_MESSAGE, { message });
     });
-
 
     socket.on('disconnecting', () => {
         const rooms = [...socket.rooms];
@@ -103,7 +98,6 @@ io.on('connection', (socket) => {
         })
         delete userSocketMap[socket.id];
         socket.leave();
-
     })
 });
 
@@ -112,6 +106,16 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ error: 'Something went wrong!' });
 });
+
+function generateRandomLink(length = 8) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+}
 
 app.post('/share', async (req, res) => {
     try {
@@ -126,8 +130,18 @@ app.post('/share', async (req, res) => {
 
         const expiryTimestamp = new Date(Date.now() + expiryMap[expiryTime]);
 
+        let linkId;
+        let isUnique = false;
+        while (!isUnique) {
+            linkId = generateRandomLink(8); 
+            const existingShare = await CodeShare.findOne({ linkId });
+            if (!existingShare) {
+                isUnique = true;
+            }
+        }
+
         const codeShare = new CodeShare({
-            linkId: uuidv4(),
+            linkId,
             code,
             isProtected,
             password: isProtected ? await bcrypt.hash(password, 10) : null,
@@ -137,7 +151,7 @@ app.post('/share', async (req, res) => {
         await codeShare.save();
 
         res.json({
-            shareLink: `${process.env.FRONTEND_URL}/share/${codeShare.linkId}`
+            shareLink: `${process.env.FRONTEND_URL}/share/${linkId}`
         });
     } catch (error) {
         console.error('API Error:', error);
