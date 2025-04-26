@@ -15,7 +15,7 @@ const SharedView = () => {
         const fetchCode = async () => {
             try {
                 const response = await axios.get(
-                    `${process.env.REACT_APP_BACKEND_URL}/api/share/${linkId}`
+                    `${process.env.REACT_APP_BACKEND_URL}/share/${linkId}`
                 );
 
                 if (response.data.isProtected) {
@@ -55,7 +55,7 @@ const SharedView = () => {
     const verifyPassword = async () => {
         try {
             const response = await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/api/share/${linkId}/verify`,
+                `${process.env.REACT_APP_BACKEND_URL}/share/${linkId}/verify`,
                 { password }
             );
             setCode(response.data.code);
@@ -65,6 +65,12 @@ const SharedView = () => {
         }
     };
 
+    const handlePasswordSubmit = (e) => {
+        if (e.key === 'Enter') {
+            verifyPassword();
+        }
+    };
+    
     if (isLoading) {
         return <div>Loading...</div>;
     }
@@ -77,12 +83,16 @@ const SharedView = () => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handlePasswordSubmit} 
                     placeholder="Enter password"
                 />
                 <button onClick={verifyPassword}>Submit</button>
             </div>
         );
     }
+
+    
+
 
     return (
         <div className="sharedViewWrapper">
