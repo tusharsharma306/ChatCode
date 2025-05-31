@@ -10,8 +10,13 @@ const Modal = ({ onClose, code }) => {
 
     const generateLink = async () => {
         try {
+            if (!code) {
+                toast.error('No code to share');
+                return;
+            }
+
             const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/share`, {
-                code,
+                code: code.trim(), 
                 isProtected,
                 password: isProtected ? password : null,
                 expiryTime
@@ -60,18 +65,18 @@ const Modal = ({ onClose, code }) => {
                     </div>
                 )}
                 <div className="form-group">
+                    <label>Expiry Time</label>
                     <select
                         value={expiryTime}
                         onChange={(e) => setExpiryTime(e.target.value)}
                     >
-                        <option value= "15min">15 Minutes</option>
+                        <option value="15min">15 Minutes</option>
                         <option value="1h">1 Hour</option>
                         <option value="24h">24 Hours</option>
                         <option value="7d">7 Days</option>
                     </select>
                 </div>
-                <button className="btn share-btn" onClick={generateLink}>Generate Link</button>
-                {generatedLink && (
+                {generatedLink ? (
                     <div className="generated-link">
                         <input
                             type="text"
@@ -79,8 +84,15 @@ const Modal = ({ onClose, code }) => {
                             readOnly
                         />
                     </div>
-                )}
-                <button className="btn" onClick={onClose}>Close</button>
+                ) : null}
+                <div className="modal-buttons">
+                    <button className="btn close-btn" onClick={onClose}>
+                        Close
+                    </button>
+                    <button className="btn share-btn" onClick={generateLink}>
+                        Generate Link
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -4,39 +4,42 @@ const roomSchema = new mongoose.Schema({
     roomId: {
         type: String,
         required: true,
-        unique: true
-    },
-    ownerId: {
-        type: String,
-        required: true
-    },
-    ownerDisconnectedAt: {
-        type: Date
-    },
-    code: {
-        type: String,
-        default: ''
-    },
-    roomWidePermissions: {
-        canEdit: { type: Boolean, default: true },
-        canExecute: { type: Boolean, default: true },
-        canShare: { type: Boolean, default: true }
+        index: false 
     },
     users: [{
         socketId: String,
         username: String,
-        role: {
+        sessionId: {
             type: String,
-            enum: ['owner', 'editor', 'viewer'],
-            default: 'editor'
+            required: true,
+            index: false 
         },
-        sessionId: String,
-        isConnected: { type: Boolean, default: true },
+        isConnected: {
+            type: Boolean,
+            default: true
+        },
         lastActive: {
             type: Date,
             default: Date.now
         }
     }]
-}, { timestamps: true });
+}, { 
+    timestamps: true,
+    
+    autoIndex: false
+});
 
-module.exports = mongoose.model('Room', roomSchema);
+const Room = mongoose.model('Room', roomSchema);
+
+async function setupIndexes() {
+    try {
+        await Room.collection.dropIndexes();
+        console.log('Indexes dropped successfully');
+    } catch (error) {
+        console.error('Error dropping indexes:', error);
+    }
+}
+
+setupIndexes();
+
+module.exports = Room;

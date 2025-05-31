@@ -72,27 +72,35 @@ const SharedView = () => {
     };
     
     if (isLoading) {
-        return <div>Loading...</div>;
+        return (
+            <div className="loadingWrapper">
+                <span>Loading<span className="loadingDots"></span></span>
+            </div>
+        );
     }
 
     if (isProtected) {
         return (
             <div className="passwordProtected">
-                <h2>This code is password protected</h2>
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={handlePasswordSubmit} 
-                    placeholder="Enter password"
-                />
-                <button onClick={verifyPassword}>Submit</button>
+                <div className="formWrapper">
+                    <h2>This code is password protected</h2>
+                    <div className="form-group">
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            onKeyDown={handlePasswordSubmit} 
+                            placeholder="Enter password"
+                            autoFocus
+                        />
+                    </div>
+                    <button onClick={verifyPassword}>
+                        Submit
+                    </button>
+                </div>
             </div>
         );
     }
-
-    
-
 
     return (
         <div className="sharedViewWrapper">

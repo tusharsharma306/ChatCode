@@ -23,18 +23,6 @@ const TypingIndicator = ({ typingUsers, currentUser }) => {
 };
 
 
-const mentionStyles = `
-    .mention {
-        color: #4aed88;
-        font-weight: bold;
-    }
-    
-    .highlight-mention {
-        background-color: rgba(74, 237, 136, 0.2);
-        padding: 2px 4px;
-        border-radius: 3px;
-    }
-`;
 
 function EditorPage() {
     const socketRef = useRef(null);
@@ -44,88 +32,69 @@ function EditorPage() {
     const typingTimeoutRef = useRef({});  
     const [clients, setClients] = useState([]);
     const [typingUsers, setTypingUsers] = useState(new Set());
-    const [userRole, setUserRole] = useState('editor'); 
-    const [roomPermissions, setRoomPermissions] = useState({
-        canEdit: true,
-        canExecute: true,
-        canShare: true
-    });
     const [mentionTimeouts, setMentionTimeouts] = useState({});
+    const [sessionId] = useState(() => {
+        const stored = localStorage.getItem('sessionId');
+        if (stored) return stored;
+        const newId = Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('sessionId', newId);
+        return newId;
+    });
+    const reconnectingRef = useRef(false);
 
     const navigate = useNavigate();
-
-
-    useEffect(() => {
-        const style = document.createElement('style');
-        style.textContent = mentionStyles;
-        document.head.appendChild(style);
-
-        return () => style.remove();
-    }, []);
 
     useEffect(() => {
         const init = async () => {
             socketRef.current = await initSocket();
             
-            socketRef.current.on('disconnect', () => {
-                toast.error('Connection lost. Attempting to reconnect...');
-            });
-
-            socketRef.current.on('reconnect', () => {
-                toast.success('Reconnected successfully!');
+            socketRef.current.on('connect', () => {
+                if (reconnectingRef.current) {
+                    toast.success('Reconnected successfully');
+                    reconnectingRef.current = false;
+                }
                 
                 socketRef.current.emit(ACTIONS.JOIN, {
                     roomId,
-                    username: location.state?.username
+                    username: location.state?.username,
+                    sessionId,
+                    isReconnecting: true
                 });
             });
 
-            socketRef.current.on('connect_error', (err) => handleErrors(err));
-            socketRef.current.on('connect_failed', (err) => handleErrors(err));
-
-            function handleErrors(e) {
-                console.log('socket error', e);
-                toast.error('socket connection failed,try again later.');
-                navigate('/');
-            }
-            socketRef.current.on(ACTIONS.ROLE_CHANGE, ({ targetSocketId, newRole }) => {
-                if (targetSocketId === socketRef.current.id) {
-                    setUserRole(newRole);
-                    toast.success(`Your role has been updated to ${newRole}`);
+            socketRef.current.io.on('reconnect_attempt', (attempt) => {
+                if (attempt === 1) {
+                    toast.loading('Attempting to reconnect...', { id: 'reconnect-toast' });
                 }
             });
 
-            socketRef.current.on(ACTIONS.OWNER_TRANSFERRED, ({ newOwnerId, username }) => {
-                if (newOwnerId === socketRef.current.id) {
-                    setUserRole('owner');
-                    toast.success('You are now the room owner');
-                } else {
-                    toast.info(`${username} is now the room owner`);
-                }
+            socketRef.current.io.on('reconnect_error', () => {
+                toast.error('Failed to reconnect. Still trying...', { id: 'reconnect-toast' });
             });
-
-            const params = new URLSearchParams(window.location.search);
-            const requestedRole = params.get('role');
-            const readonly = params.get('readonly') === 'true';
 
             socketRef.current.emit(ACTIONS.JOIN, {
                 roomId,
                 username: location.state?.username,
-                role: requestedRole,
-                readonly
+                sessionId,
+                isReconnecting: false
             });
 
+            socketRef.current.on('disconnect', () => {
+                reconnectingRef.current = true;
+                toast.error('Connection lost. Attempting to reconnect...', {
+                    id: 'disconnect-toast'
+                });
+            });
 
-            socketRef.current.on(ACTIONS.JOINED, ({ clients, username, socketId, role }) => {
+            socketRef.current.on(ACTIONS.JOINED, ({ clients, username, socketId }) => {
                 if (username !== location.state?.username) {
                     toast.success(`${username} joined the room`);
                 }
-                setClients(clients); 
+                setClients(clients);
                 socketRef.current.emit(ACTIONS.SYNC_CODE, {
                     code: codeRef.current,
                     socketId,
                 });
-                
             });
 
             socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
@@ -219,6 +188,7 @@ function EditorPage() {
         init();
 
         return () => {
+            localStorage.removeItem('sessionId');
             Object.values(typingTimeoutRef.current).forEach(timeout => {
                 clearTimeout(timeout);
             });
@@ -398,118 +368,93 @@ function EditorPage() {
 
     return (
         <div className='mainWrap'>
-          <div className='aside'>
-            <div className='asideInner'>
-              <div className='logo'>
-                <img
-                  className='logoImage'
-                  src='/proj-logo.png' alt='chat-code-logo' />
+            <div className='aside'>
+                <div className='asideInner'>
+                    <div className='logo'>
+                        <img
+                            className='logoImage'
+                            src='/proj-logo.png'
+                            alt='chat-code-logo'
+                        />
 
-              </div>
-              <h3>Connected</h3>
-              <div className='clientsList'>
-                {clients.map((client) => (
-                  <Client
-                    key={client.socketId}
-                    username={client.username} />
-                ))}
-              </div>
+                    </div>
+                    <h3>Connected</h3>
+                    <div className='clientsList'>
+                        {clients.map((client) => (
+                            <Client
+                                key={client.socketId}
+                                username={client.username}
+                                socketId={client.socketId}
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
 
-            <label>
-              Select Language:
-              <select id="languageOptions" className="seLang" defaultValue="17">
-                <option value="1">C#</option>
-                <option value="4">Java</option>
-                <option value="5">Python</option>
-                <option value="6">C (gcc)</option>
-                <option value="7">C++ (gcc)</option>
-                <option value="8">PHP</option>
-                <option value="11">Haskell</option>
-                <option value="12">Ruby</option>
-                <option value="13">Perl</option>
-                <option value="17">Javascript</option>
-                <option value="20">Golang</option>
-                <option value="21">Scala</option>
-                <option value="37">Swift</option>
-                <option value="38">Bash</option>
-                <option value="43">Kotlin</option>
-                <option value="60">TypeScript</option>
-              </select>
-            </label>
-            <button className="btn runBtn" onClick={runCode}>
-              Run Code
-            </button>
-
-            <button className='btn copyBtn' onClick={copyRoomId}>
-              Copy ROOM ID</button>
-            <button className='btn leaveBtn' onClick={leaveRoom}>
-              Leave</button>
-            
-          </div>
-          <div className='editorWrap'>
-            <Editor
-              socketRef={socketRef}
-              roomId={roomId}
-              onCodeChange={(code) => {
-                codeRef.current = code;
-              }}
-              userRole={userRole}
-              roomPermissions={roomPermissions}
-            />
-            <div className="IO-container">
-              <label
-                id="inputLabel"
-                className="clickedLabel"
-                onClick={inputClicked}
-              >
-                Input
-              </label>
-              <label
-                id="outputLabel"
-                className="notClickedLabel"
-                onClick={outputClicked}
-              >
-                Output
-              </label>
-            </div>
-            <textarea
-              id="input"
-              className="inputArea textarea-style"
-              placeholder="Enter your input here"
-            ></textarea>
-          </div>
-
-          <div className="chatWrap">
-            <div
-                id="chatWindow"
-                className="chatArea textarea-style"
-                style={{ 
-                    overflowY: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word'
-                }}
-            />
-            {typingUsers.size > 0 && (
-                <TypingIndicator 
-                    typingUsers={typingUsers} 
-                    currentUser={location.state?.username}
+            <div className='editorWrap'>
+                <Editor
+                    socketRef={socketRef}
+                    roomId={roomId}
+                    onCodeChange={(code) => {
+                        codeRef.current = code;
+                    }}
+                    runCode={runCode}
+                    copyRoomId={copyRoomId}
+                    leaveRoom={leaveRoom}
                 />
-            )}
-            <div className="sendChatWrap">
-              <input
-                id="inputBox"
-                type="text"
-                placeholder="Type your message here"
-                className="inputField"
-                onKeyUp={(e) => e.code === "Enter" && sendMessage()}
-                onChange={handleMessageInput}
-              />
-              <button className="btn sendBtn" onClick={sendMessage}>
-                <img src="/send-button.png" alt="send" className="send" />
-              </button>
+                <div className="IO-container">
+                    <label
+                        id="inputLabel"
+                        className="clickedLabel"
+                        onClick={inputClicked}
+                    >
+                        Input
+                    </label>
+                    <label
+                        id="outputLabel"
+                        className="notClickedLabel"
+                        onClick={outputClicked}
+                    >
+                        Output
+                    </label>
+                </div>
+                <textarea
+                    id="input"
+                    className="inputArea textarea-style"
+                    placeholder="Enter your input here"
+                ></textarea>
             </div>
-          </div>
+
+            <div className="chatWrap">
+                <div
+                    id="chatWindow"
+                    className="chatArea textarea-style"
+                    style={{ 
+                        overflowY: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word'
+                    }}
+                />
+                {typingUsers.size > 0 && (
+                    <TypingIndicator 
+                        typingUsers={typingUsers} 
+                        currentUser={location.state?.username}
+                    />
+                )}
+                <div className="sendChatWrap">
+                    <input
+                        id="inputBox"
+                        type="text"
+                        placeholder="Type your message here"
+                        className="inputField"
+                        onKeyUp={handleInputEnter}
+                        onChange={handleMessageInput}
+                    />
+                    <button className="btn sendBtn" onClick={sendMessage}>
+                        <img src="/send-button.png" alt="send" className="send" />
+                    </button>
+                </div>
+            </div>
 
         </div>
       );

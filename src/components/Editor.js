@@ -7,52 +7,22 @@ import 'codemirror/mode/javascript/javascript';
 import 'codemirror/addon/edit/closetag';
 import 'codemirror/addon/edit/closebrackets';
 import ACTIONS from '../pages/Action';
-import Modal from './Modal'; 
+import Modal from './Modal';
 
-const Editor = ({ socketRef, roomId, onCodeChange }) => {
+const Editor = ({ 
+    socketRef, 
+    roomId, 
+    onCodeChange,
+    runCode,     
+    copyRoomId,
+    leaveRoom
+}) => {
     const editorRef = useRef(null);
     const [showModal, setShowModal] = useState(false);
+    const location = useLocation();
     const cursorsRef = useRef({});
     const cursorTimeoutsRef = useRef({});
-    const location = useLocation();
-    
-    const getColorForUser = (userId) => {
-        const colors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
-            '#FFEEAD', '#D4A5A5', '#9B59B6', '#3498DB'
-        ];
-        const hash = Array.from(userId).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        return colors[Math.abs(hash) % colors.length];
-    };
-
-    const updateCursorPosition = (socketId, cursor, username) => {
-        
-        if (cursorsRef.current[socketId]?.marker) {
-            cursorsRef.current[socketId].marker.clear();
-        }
-
-        const cursorElement = document.createElement('div');
-        cursorElement.className = 'remote-cursor';
-        cursorElement.style.backgroundColor = getColorForUser(socketId);
-        cursorElement.setAttribute('data-username', username);
-
-        const cursorPos = { line: cursor.line, ch: cursor.ch };
-        const marker = editorRef.current.setBookmark(cursorPos, { widget: cursorElement });
-
-        cursorsRef.current[socketId] = {
-            marker,
-            element: cursorElement,
-            username
-        };
-
-        if (cursorTimeoutsRef.current[socketId]) {
-            clearTimeout(cursorTimeoutsRef.current[socketId]);
-        }
-
-        cursorTimeoutsRef.current[socketId] = setTimeout(() => {
-            cursorElement.classList.add('cursor-inactive');
-        }, 5000);
-    };
+    const [editorReady, setEditorReady] = useState(false);
 
     useEffect(() => {
         async function init() {
@@ -65,32 +35,28 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
                     autoCloseBrackets: true,
                     lineNumbers: true,
                     lineWrapping: true,
-                    readOnly: false  
+                    styleActiveLine: true,
+                    matchBrackets: true,
+                    tabSize: 2,
+                    indentUnit: 2,
+                    viewportMargin: Infinity,
+                    extraKeys: {
+                        'Ctrl-S': function(cm) {
+                            
+                            return false;
+                        }
+                    }
                 }
             );
-
-            editorRef.current.on('cursorActivity', () => {
-                if (!socketRef.current) return;
-
-                const cursor = editorRef.current.getCursor();
-                const username = location.state?.username;
-
-                if (cursor && typeof cursor.line === 'number' && typeof cursor.ch === 'number') {
-                    socketRef.current.emit(ACTIONS.CURSOR_MOVE, {
-                        roomId,
-                        cursor: {
-                            line: cursor.line,
-                            ch: cursor.ch
-                        },
-                        username
-                    });
-                }
-            });
+            editorRef.current.setSize('100%', '100%');
+            editorRef.current.refresh();
+            setEditorReady(true);
 
             editorRef.current.on('change', (instance, changes) => {
                 const { origin } = changes;
                 const code = instance.getValue();
                 onCodeChange(code);
+                
                 if (origin !== 'setValue') {
                     socketRef.current?.emit(ACTIONS.CODE_CHANGE, {
                         roomId,
@@ -98,80 +64,150 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
                     });
                 }
             });
+
+            editorRef.current.on('cursorActivity', () => {
+                if (!socketRef.current) return;
+                
+                const cursor = editorRef.current.getCursor();
+                const selection = editorRef.current.getSelection();
+                
+                socketRef.current.emit(ACTIONS.CURSOR_MOVE, {
+                    roomId,
+                    cursor,
+                    selection,
+                    username: location.state?.username
+                });
+            });
         }
         init();
 
         return () => {
             if (editorRef.current) {
-                Object.values(cursorTimeoutsRef.current).forEach(clearTimeout);
-                Object.values(cursorsRef.current).forEach(({ marker }) => marker?.clear());
+                
+                Object.values(cursorsRef.current).forEach(cursor => cursor.clear());
+                cursorsRef.current = {};
+                
+                Object.values(cursorTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
+                cursorTimeoutsRef.current = {};
+               
                 editorRef.current.toTextArea();
             }
         };
-    }, []); 
+    }, []);
 
     useEffect(() => {
-        if (!socketRef.current) return;
-
-        socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ socketId, cursor, username }) => {
-            if (socketId !== socketRef.current.id) {
-                updateCursorPosition(socketId, cursor, username);
-            }
-        });
-
-        socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId }) => {
-            if (cursorsRef.current[socketId]?.marker) {
-                cursorsRef.current[socketId].marker.clear();
-                delete cursorsRef.current[socketId];
-            }
-            if (cursorTimeoutsRef.current[socketId]) {
-                clearTimeout(cursorTimeoutsRef.current[socketId]);
-                delete cursorTimeoutsRef.current[socketId];
-            }
-        });
-
-        return () => {
-            socketRef.current.off(ACTIONS.CURSOR_MOVE);
-            socketRef.current.off(ACTIONS.DISCONNECTED);
-        };
-    }, [socketRef.current]);
-
-    useEffect(() => {
-        if (socketRef.current) {
+        if (socketRef.current && editorReady) {
             socketRef.current.on(ACTIONS.CODE_CHANGE, ({ code }) => {
-                if (code !== null) {
+                if (code !== null && editorRef.current) {
+                    const cursor = editorRef.current.getCursor();
+                    const scrollInfo = editorRef.current.getScrollInfo();
                     editorRef.current.setValue(code);
+                    editorRef.current.setCursor(cursor);
+                    editorRef.current.scrollTo(scrollInfo.left, scrollInfo.top);
                 }
             });
-        }
 
-        return () => {
-            if (socketRef.current) {
+            socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ socketId, cursor, selection, username }) => {
+                if (!cursor || socketId === socketRef.current.id) return;
+
+                if (cursorTimeoutsRef.current[socketId]) {
+                    clearTimeout(cursorTimeoutsRef.current[socketId]);
+                }
+
+              
+                if (cursorsRef.current[socketId]) {
+                    cursorsRef.current[socketId].clear();
+                }
+
+                const cursorElement = document.createElement('span');
+                cursorElement.className = 'remote-cursor';
+                cursorElement.style.borderLeftColor = `hsl(${hashCode(username) % 360}, 70%, 50%)`;
+                cursorElement.setAttribute('data-username', username);
+
+                cursorsRef.current[socketId] = editorRef.current.setBookmark(
+                    { line: cursor.line, ch: cursor.ch },
+                    { widget: cursorElement }
+                );
+
+                cursorTimeoutsRef.current[socketId] = setTimeout(() => {
+                    if (cursorsRef.current[socketId]) {
+                        cursorsRef.current[socketId].clear();
+                        delete cursorsRef.current[socketId];
+                    }
+                }, 3000);
+            });
+
+            return () => {
                 socketRef.current.off(ACTIONS.CODE_CHANGE);
                 socketRef.current.off(ACTIONS.CURSOR_MOVE);
-            }
-        };
-    }, [socketRef.current]);
+            };
+        }
+    }, [socketRef.current, editorReady]);
 
-    const generateShareLink = () => {
-        setShowModal(true);
+    const hashCode = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return Math.abs(hash);
     };
 
     return (
         <div className="editor-container">
-            <button 
-                className="share-btn"
-                onClick={generateShareLink}
-                style={{
-                    position: 'absolute',
-                    top: '10px',
-                    right: '10px',
-                    zIndex: 1000
-                }}
-            >
-                Share Code
-            </button>
-            <textarea id='realtimeEditor'></textarea>
+            <div className="editor-header">
+                <select className="header-select" defaultValue="7">
+                <option value="1">C#</option>
+                <option value="4">Java</option>
+                <option value="5">Python</option>
+                <option value="6">C (gcc)</option>
+                <option value="7">C++ (gcc)</option>
+                <option value="8">PHP</option>
+                <option value="11">Haskell</option>
+                <option value="12">Ruby</option>
+                <option value="13">Perl</option>
+                <option value="17">Javascript</option>
+                <option value="20">Golang</option>
+                <option value="21">Scala</option>
+                <option value="37">Swift</option>
+                <option value="38">Bash</option>
+                <option value="43">Kotlin</option>
+                <option value="60">TypeScript</option>
+                </select>
+                
+                <div className="editor-header-buttons">
+                    <button 
+                        className="icon-btn run-code btn-tooltip" 
+                        onClick={runCode}
+                        data-tooltip="Run Code"
+                    >
+                        <img src="/run-icon.png" alt="run" />
+                    </button>
+                    <button 
+                        className="icon-btn share-code btn-tooltip"
+                        onClick={() => setShowModal(true)}
+                        data-tooltip="Share Code"
+                    >
+                        <img src="/share-icon.png" alt="share" />
+                    </button>
+                    <button 
+                        className="icon-btn copy-id btn-tooltip" 
+                        onClick={copyRoomId}
+                        data-tooltip="Copy Room ID"
+                    >
+                        <img src="/copy-icon.png" alt="copy" />
+                    </button>
+                    <button 
+                        className="icon-btn leave-room btn-tooltip" 
+                        onClick={leaveRoom}
+                        data-tooltip="Leave Room"
+                    >
+                        <img src="/leave-icon.png" alt="leave" />
+                    </button>
+                </div>
+            </div>
+            <div className="editor-content">
+                <textarea id="realtimeEditor"></textarea>
+            </div>
             {showModal && (
                 <Modal 
                     onClose={() => setShowModal(false)}

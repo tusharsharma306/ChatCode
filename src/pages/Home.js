@@ -16,11 +16,13 @@ const Home = () => {
     const navigate = useNavigate();
     const [roomId, setRoomId] = useState('');
     const [username, setUsername] = useState('');
+    const [generatedRoomId, setGeneratedRoomId] = useState(''); 
 
     const createNewRoom = (e) => {
         e.preventDefault();
         const id = generateRandomLink(8); 
         setRoomId(id);
+        setGeneratedRoomId(id); 
         toast.success('Created a New Room');
     };
 
@@ -30,6 +32,7 @@ const Home = () => {
             return;
         }
 
+        // Simplified navigation without roles
         navigate(`/editor/${roomId}`, {
             state: {
                 username,
