@@ -8,6 +8,7 @@ const http = require('http');
 const cors = require('cors');
 const MONGODB_URI = process.env.MONGODB_URI;
 const PORT = process.env.PORT || 5000;
+const Room = require('./models/Room');
 
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -37,33 +38,108 @@ const io = new Server(server, {
     }
 });
 
-const userSocketMap = {};
+const userSocketMap = new Map(); 
 
-function getAllConnectedClients(roomId) {
-    return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map((socketId) => {
-        return {
-            socketId,
-            username: userSocketMap[socketId],
-        };
-    });
+async function getAllConnectedClients(roomId) {
+    try {
+        const room = await Room.findOne({ roomId });
+        if (!room) return [];
+        
+        return room.users
+            .filter(user => user.isConnected)
+            .map(user => ({
+                socketId: user.socketId,
+                username: user.username,
+                role: user.role
+            }));
+    } catch (error) {
+        console.error('Error getting connected clients:', error);
+        return [];
+    }
 }
 
-io.on('connection', (socket) => {
+async function getRoomById(roomId) {
+    try {
+        return await Room.findOne({ roomId });
+    } catch (error) {
+        console.error('Error getting room:', error);
+        return null;
+    }
+}
 
+const ownershipTransferTimeout = 10 * 60 * 1000; 
+
+io.on('connection', async (socket) => {
     console.log('socket connected', socket.id);
-    socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
-        userSocketMap[socket.id] = username;
-        socket.join(roomId);
-        // Notify about new joines users to existing users
-        const clients = getAllConnectedClients(roomId);
-        clients.forEach(({ socketId }) =>
-            io.to(socketId).emit(ACTIONS.JOINED, {
+
+    socket.on(ACTIONS.JOIN, async ({ roomId, username, role: requestedRole, readonly }) => {
+        try {
+            let room = await Room.findOne({ roomId });
+            
+            userSocketMap.set(socket.id, {
+                username,
+                roomId,
+                role: room?.ownerId === socket.id ? 'owner' : 'editor' 
+            });
+
+            const existingUser = room?.users.find(u => u.username === username);
+            
+            if (!room) {
+                room = new Room({
+                    roomId,
+                    ownerId: socket.id,
+                    users: [{
+                        socketId: socket.id,
+                        username,
+                        role: 'owner',
+                        sessionId: socket.id,
+                        isConnected: true
+                    }],
+                    roomWidePermissions: {
+                        canEdit: true,
+                        canExecute: true,
+                        canShare: true
+                    }
+                });
+            } else if (existingUser) {
+                
+                existingUser.socketId = socket.id;
+                existingUser.isConnected = true;
+                existingUser.lastActive = new Date();
+                existingUser.role = existingUser.role === 'owner' ? 'owner' : 'editor'; 
+            } else {
+                room.users.push({
+                    socketId: socket.id,
+                    username,
+                    role: 'editor', 
+                    sessionId: socket.id,
+                    isConnected: true
+                });
+            }
+
+            await room.save();
+            socket.join(roomId);
+
+            const userRole = room.users.find(u => u.socketId === socket.id)?.role || 'editor';
+
+            const clients = await getAllConnectedClients(roomId);
+
+            io.to(roomId).emit(ACTIONS.JOINED, {
                 clients,
                 username,
                 socketId: socket.id,
-            })
-        )
-    })
+                role: userRole,
+                permissions: {
+                    canEdit: true,
+                    canExecute: true,
+                    canShare: true
+                }
+            });
+
+        } catch (error) {
+            console.error('JOIN error:', error);
+        }
+    });
 
     socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
         socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
@@ -77,28 +153,188 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit(ACTIONS.GET_OUTPUT, { output });
     });
 
-    socket.on(ACTIONS.SEND, ({ roomId, messages, currentuser }) => {
+    socket.on(ACTIONS.SEND, ({ roomId, message, currentuser }) => {
         io.in(roomId).emit(ACTIONS.RECEIVE, {
-            messages,
+            message,
             currentuser,
         });
     })
 
-    socket.on(ACTIONS.SEND_MESSAGE, ({ roomId, message }) => {
-        socket.broadcast.to(roomId).emit(ACTIONS.SEND_MESSAGE, { message });
+    socket.on(ACTIONS.MENTION, ({ from, message }) => {
+    toast.success(`@${from} mentioned you: "${message}"`, {
+        icon: '📣'
+    });
+});
+
+
+    socket.on(ACTIONS.SEND_MESSAGE, async ({ roomId, message, username }) => {
+        try {
+            const room = await Room.findOne({ roomId });
+            if (!room) return;
+
+            const mentionRegex = /@(\w+)/g;
+            const mentions = message.match(mentionRegex);
+            
+            if (mentions) {
+                mentions.forEach(mention => {
+                    const mentionedUsername = mention.slice(1);
+                    const mentionedUser = room.users.find(
+                        u => u.username.toLowerCase() === mentionedUsername.toLowerCase()
+                    );
+                    
+                    if (mentionedUser) {
+                        io.to(mentionedUser.socketId).emit(ACTIONS.MENTION, {
+                            fromUser: username,
+                            message
+                        });
+                    }
+                });
+            }
+
+            socket.to(roomId).emit(ACTIONS.SEND_MESSAGE, { 
+                message,
+                username,
+                mentions: mentions || [] 
+            });
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
     });
 
-    socket.on('disconnecting', () => {
-        const rooms = [...socket.rooms];
-        rooms.forEach((roomId) => {
-            socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
+    let typingTimeouts = {};
+    socket.on(ACTIONS.USER_TYPING, ({ roomId, username }) => {
+        if (!username) return;
+        
+        const user = userSocketMap.get(socket.id);
+        if (!user) return;
+
+        if (typingTimeouts[username]) {
+            clearTimeout(typingTimeouts[username]);
+        }
+
+        socket.to(roomId).emit(ACTIONS.USER_TYPING, { 
+            username,
+            socketId: socket.id
+        });
+
+        typingTimeouts[username] = setTimeout(() => {
+            socket.to(roomId).emit(ACTIONS.USER_TYPING, { 
+                username: null,
+                socketId: socket.id
+            });
+            delete typingTimeouts[username];
+        }, 2000);
+    });
+
+    socket.on(ACTIONS.UPDATE_ROLE, async ({ roomId, targetSocketId, newRole }) => {
+        try {
+            const room = await Room.findOne({ roomId });
+            if (!room || room.ownerId !== socket.id) {
+                return;
+            }
+
+            const userIndex = room.users.findIndex(u => u.socketId === targetSocketId);
+            if (userIndex === -1) {
+                return;
+            }
+
+            if (room.users[userIndex].role === 'owner') {
+                return;
+            }
+
+            room.users[userIndex].role = newRole;
+            await room.save();
+
+            io.in(roomId).emit(ACTIONS.ROLE_CHANGE, {
+                socketId: targetSocketId,
+                newRole
+            });
+        } catch (error) {
+            console.error('Role update error:', error);
+        }
+    });
+
+    socket.on(ACTIONS.UPDATE_PERMISSIONS, async ({ roomId, permissions }) => {
+        try {
+            const room = await Room.findOne({ roomId });
+            if (!room || room.ownerId !== socket.id) {
+                return;
+            }
+
+            room.roomWidePermissions = permissions;
+            await room.save();
+
+            io.in(roomId).emit(ACTIONS.PERMISSIONS_CHANGE, { permissions });
+        } catch (error) {
+            console.error('Permissions update error:', error);
+        }
+    });
+
+    socket.on(ACTIONS.CURSOR_MOVE, ({ roomId, cursor, username }) => {
+        if (cursor && typeof cursor.line === 'number' && typeof cursor.ch === 'number') {
+            socket.to(roomId).emit(ACTIONS.CURSOR_MOVE, {
                 socketId: socket.id,
-                username: userSocketMap[socket.id],
-            })
-        })
-        delete userSocketMap[socket.id];
-        socket.leave();
-    })
+                cursor,
+                username
+            });
+        }
+    });
+
+    socket.on('disconnect', async () => {
+        try {
+            const user = userSocketMap.get(socket.id);
+            if (user) {
+                const room = await Room.findOne({ roomId: user.roomId });
+                if (room) {
+                    const disconnectedUser = room.users.find(u => u.socketId === socket.id);
+                    if (disconnectedUser) {
+                        disconnectedUser.isConnected = false;
+                        disconnectedUser.lastActive = new Date();
+                    }
+
+                    if (room.ownerId === socket.id) {
+                        room.ownerDisconnectedAt = new Date();
+                        
+                        io.to(room.roomId).emit(ACTIONS.OWNER_DISCONNECTED, {
+                            message: 'Owner disconnected. Room management is paused. Waiting up to 10 minutes before transfer.'
+                        });
+
+                        setTimeout(async () => {
+                            const updatedRoom = await Room.findById(room._id);
+                            if (updatedRoom && !updatedRoom.users.find(u => u.socketId === socket.id)?.isConnected) {
+                                
+                                const newOwner = updatedRoom.users
+                                    .filter(u => u.isConnected && u.socketId !== socket.id)
+                                    .sort((a, b) => a.joinedAt - b.joinedAt)[0];
+
+                                if (newOwner) {
+                                    updatedRoom.ownerId = newOwner.socketId;
+                                    newOwner.role = 'owner';
+                                    updatedRoom.ownerDisconnectedAt = null;
+                                    await updatedRoom.save();
+
+                                    io.to(updatedRoom.roomId).emit(ACTIONS.OWNER_TRANSFERRED, {
+                                        newOwnerUsername: newOwner.username
+                                    });
+                                }
+                            }
+                        }, ownershipTransferTimeout);
+                    }
+
+                    await room.save();
+
+                    socket.to(room.roomId).emit(ACTIONS.DISCONNECTED, {
+                        socketId: socket.id,
+                        username: user.username
+                    });
+                }
+                userSocketMap.delete(socket.id);
+            }
+        } catch (error) {
+            console.error('Disconnect error:', error);
+        }
+    });
+
 });
 
 // Error handling middleware
