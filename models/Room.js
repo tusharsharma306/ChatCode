@@ -6,6 +6,9 @@ const roomSchema = new mongoose.Schema({
         required: true,
         index: false 
     },
+    initialCode: {
+        type: String
+    },
     users: [{
         socketId: String,
         username: String,

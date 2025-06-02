@@ -110,7 +110,7 @@ io.on('connection', async (socket) => {
                     room.users[existingUserIndex].socketId = socket.id;
                     room.users[existingUserIndex].isConnected = true;
                     room.users[existingUserIndex].lastActive = new Date();
-                    room.users[existingUserIndex].username = username; // Update username in case it changed
+                    room.users[existingUserIndex].username = username;
                 } else {
                     room.users.push({
                         socketId: socket.id,
@@ -123,13 +123,17 @@ io.on('connection', async (socket) => {
 
                 room.users = room.users.filter(user => {
                     const disconnectedTime = Date.now() - user.lastActive;
-                    return user.isConnected || disconnectedTime < 24 * 60 * 60 * 1000; // Keep for 24 hours
+                    return user.isConnected || disconnectedTime < 24 * 60 * 60 * 1000;
                 });
             }
 
             await room.save();
             socket.join(roomId);
             
+            if (room.initialCode && room.users.length === 1) {
+                socket.emit(ACTIONS.CODE_CHANGE, { code: room.initialCode });
+            }
+
             userSocketMap.set(socket.id, { username, roomId });
             
             const clients = await getAllConnectedClients(roomId);
@@ -138,7 +142,6 @@ io.on('connection', async (socket) => {
                 username,
                 socketId: socket.id
             });
-
         } catch (error) {
             console.error('JOIN error:', error);
             socket.emit('error', { message: 'Failed to join room' });
@@ -289,7 +292,7 @@ app.post('/share', async (req, res) => {
         const { code, isProtected, password, expiryTime } = req.body;
 
         if (!code || typeof code !== 'string') {
-            return res.status(400).json({ error: 'Code is required and must be a string' });
+            return res.status(400).json({ error: 'Code is required!' });
         }
 
         const expiryMap = {
@@ -344,15 +347,19 @@ app.get('/share/:linkId', async (req, res) => {
 
         if (Date.now() > codeShare.expiryTimestamp) {
             return res.status(410).json({ error: 'Link expired' });
-        }
-
-        if (codeShare.isProtected) {
-            return res.json({ isProtected: true });
+        }        if (codeShare.isProtected) {
+            return res.json({ 
+                isProtected: true,
+                createdAt: codeShare.createdAt,
+                expiryTimestamp: codeShare.expiryTimestamp 
+            });
         }
 
         res.json({
             code: codeShare.code,
-            isProtected: false
+            isProtected: false,
+            createdAt: codeShare.createdAt,
+            expiryTimestamp: codeShare.expiryTimestamp
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch Code' });
@@ -370,15 +377,50 @@ app.post('/share/:linkId/verify', async (req, res) => {
             return res.status(404).json({ error: 'Link not found' });
         }
 
-        const isValid = await bcrypt.compare(password, codeShare.password);
-
-        if (!isValid) {
+        const isValid = await bcrypt.compare(password, codeShare.password);       
+         if (!isValid) {
             return res.status(401).json({ error: 'Invalid password' });
         }
 
-        res.json({ code: codeShare.code });
+        res.json({
+            code: codeShare.code,
+            createdAt: codeShare.createdAt,
+            expiryTimestamp: codeShare.expiryTimestamp
+        });
     } catch (error) {
         res.status(500).json({ error: 'Failed to verify password' });
+    }
+});
+
+app.post('/fork-snippet', async (req, res) => {
+    try {
+        const { code } = req.body;
+        
+        if (!code || typeof code !== 'string') {
+            return res.status(400).json({ error: 'Code is required!' });
+        }
+
+        let isUnique = false;
+        let newRoomId;
+        
+        while (!isUnique) {
+            newRoomId = generateRandomLink(8);
+            const existingRoom = await Room.findOne({ roomId: newRoomId });
+            if (!existingRoom) {
+                isUnique = true;
+            }
+        }
+
+        const room = new Room({
+            roomId: newRoomId,
+            initialCode: code
+        });
+
+        await room.save();
+        res.json({ roomId: newRoomId });
+    } catch (error) {
+        console.error('Fork error:', error);
+        res.status(500).json({ error: 'Failed to fork snippet' });
     }
 });
 
