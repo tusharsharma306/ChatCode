@@ -5,7 +5,6 @@ import { initSocket } from '../Socket';
 import ACTIONS from './Action';
 import { useLocation,useNavigate,Navigate,useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import axios from "axios";
 
 const TypingIndicator = ({ typingUsers, currentUser }) => {
     const typingUsersArray = Array.from(typingUsers);
@@ -265,57 +264,6 @@ function EditorPage() {
       
       
 
-    
-    const runCode = () => {
-        const lang = document.getElementById("languageOptions").value;
-        const input = document.getElementById("input").value;
-        const code = codeRef.current;
-        const defaultInput = "Default input value";
-        toast.loading("Running Code....");
-
-        const encodedParams = new URLSearchParams();
-        encodedParams.append("LanguageChoice", lang);
-        encodedParams.append("Program", code);
-        encodedParams.append("Input", input || defaultInput);
-        
-      
-
-    const options = {
-      method: 'POST',
-      url: 'https://code-compiler.p.rapidapi.com/v2',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'X-RapidAPI-Key': process.env.REACT_APP_API_KEY,
-        'X-RapidAPI-Host': 'code-compiler.p.rapidapi.com'
-      },
-      data: encodedParams,
-    };
-
-    console.log(options);
-
-    axios
-      .request(options)
-      .then(function (response) {
-        let message = response.data.Result;
-        if (message === null) {
-          message = response.data.Errors;
-        }
-        
-
-         document.getElementById("input").value = message;
-        socketRef.current.emit(ACTIONS.GET_OUTPUT, { roomId, output: message });
-        toast.dismiss();
-        toast.success("Code compilation complete");
-      })
-      .catch(function (_error) {
-        toast.dismiss();
-        toast.error("Code compilation unsuccessful");
-        document.getElementById("input").value =
-          "Something went wrong, Please check your code and input.";
-      });
-    };
-
-
 
     const sendMessage = () => {
       const inputBox = document.getElementById("inputBox");
@@ -398,7 +346,6 @@ function EditorPage() {
                     onCodeChange={(code) => {
                         codeRef.current = code;
                     }}
-                    runCode={runCode}
                     copyRoomId={copyRoomId}
                     leaveRoom={leaveRoom}
                 />

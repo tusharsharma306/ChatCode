@@ -1219,3 +1219,71 @@ select {
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
 }
+
+.remote-cursor {
+    border-left: 3px solid; 
+    border-left-color: transparent;
+    position: relative;
+    margin-left: -3px;
+    margin-right: -3px;
+    padding: 0 2px; 
+    z-index: 3;
+    cursor: pointer; 
+}
+
+.remote-cursor::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    left: -4px;
+    right: -4px;
+    background: transparent;
+    border-radius: var(--border-radius-sm);
+    transition: var(--transition);
+}
+
+.remote-cursor::after {
+    content: attr(data-username);
+    position: absolute;
+    top: -2em;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--background-lighter);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: var(--border-radius-sm);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    z-index: 1000;
+}
+
+.remote-cursor:hover::before {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.remote-cursor:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+.CodeMirror-cursor {
+    border-left: 2px solid var(--text-primary) !important;
+    z-index: 2;
+}
+
+.remote-cursor:hover::after {
+    animation: none;
+}
+
+.remote-cursor {
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}

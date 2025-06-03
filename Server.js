@@ -9,6 +9,7 @@ const cors = require('cors');
 const MONGODB_URI = process.env.MONGODB_URI;
 const PORT = process.env.PORT || 5000;
 const Room = require('./models/Room');
+const axios = require('axios');
 
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -286,6 +287,53 @@ function generateRandomLink(length = 8) {
     }
     return result;
 }
+
+
+app.post('/run-code', async (req, res) => {
+    try {
+        const { code, language, input } = req.body;
+        const defaultInput = "Default input value";
+
+        if (!code || !language) {
+            return res.status(400).json({ 
+                error: 'Code and language are required' 
+            });
+        }
+
+        const encodedParams = new URLSearchParams();
+        encodedParams.append("LanguageChoice", language);
+        encodedParams.append("Program", code);
+        encodedParams.append("Input", input || defaultInput);
+
+        const options = {
+            method: 'POST',
+            url: 'https://code-compiler.p.rapidapi.com/v2',
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                'X-RapidAPI-Key': process.env.RAPID_API_KEY,
+                'X-RapidAPI-Host': 'code-compiler.p.rapidapi.com'
+            },
+            data: encodedParams,
+        };
+
+        const response = await axios.request(options);
+        let result = response.data.Result;
+        
+        if (result === null) {
+            result = response.data.Errors;
+        }
+
+        res.json({ output: result });
+
+    } catch (error) {
+        console.error('Code execution error:', error);
+        res.status(500).json({ 
+            error: 'Code compilation failed',
+            details: error.message 
+        });
+    }
+});
+
 
 app.post('/share', async (req, res) => {
     try {

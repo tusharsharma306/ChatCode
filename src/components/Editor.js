@@ -8,12 +8,12 @@ import 'codemirror/addon/edit/closetag';
 import 'codemirror/addon/edit/closebrackets';
 import ACTIONS from '../pages/Action';
 import Modal from './Modal';
+import { toast } from 'react-hot-toast';
 
 const Editor = ({ 
     socketRef, 
     roomId, 
     onCodeChange,
-    runCode,     
     copyRoomId,
     leaveRoom
 }) => {
@@ -69,12 +69,10 @@ const Editor = ({
                 if (!socketRef.current) return;
                 
                 const cursor = editorRef.current.getCursor();
-                const selection = editorRef.current.getSelection();
                 
                 socketRef.current.emit(ACTIONS.CURSOR_MOVE, {
                     roomId,
                     cursor,
-                    selection,
                     username: location.state?.username
                 });
             });
@@ -107,7 +105,7 @@ const Editor = ({
                 }
             });
 
-            socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ socketId, cursor, selection, username }) => {
+            socketRef.current.on(ACTIONS.CURSOR_MOVE, ({ socketId, cursor,  username }) => {
                 if (!cursor || socketId === socketRef.current.id) return;
 
                 if (cursorTimeoutsRef.current[socketId]) {
@@ -143,6 +141,56 @@ const Editor = ({
             };
         }
     }, [socketRef.current, editorReady]);
+
+    const runCode = async () => {
+        try {
+            const lang = document.querySelector(".header-select").value;
+            const inputArea = document.querySelector(".inputArea");
+            const code = editorRef.current.getValue();
+            
+            toast.loading("Running Code....");
+
+            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/run-code`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    code,
+                    language: lang,
+                    input: inputArea?.value
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to compile code');
+            }
+
+            if (inputArea) {
+                inputArea.value = data.output;
+            }
+
+            socketRef.current?.emit(ACTIONS.GET_OUTPUT, { 
+                roomId, 
+                output: data.output 
+            });
+
+            toast.dismiss();
+            toast.success("Code compilation complete");
+
+        } catch (error) {
+            console.error('Run code error:', error);
+            toast.dismiss();
+            toast.error(error.message || "Code compilation unsuccessful");
+            
+            const inputArea = document.querySelector(".inputArea");
+            if (inputArea) {
+                inputArea.value = "Something went wrong, Please check your code and input.";
+            }
+        }
+    };
 
     const hashCode = (str) => {
         let hash = 0;
