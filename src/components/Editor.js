@@ -9,6 +9,7 @@ import 'codemirror/addon/edit/closebrackets';
 import ACTIONS from '../pages/Action';
 import Modal from './Modal';
 import { toast } from 'react-hot-toast';
+import axios from 'axios';
 
 const Editor = ({ 
     socketRef, 
@@ -150,37 +151,75 @@ const Editor = ({
             
             toast.loading("Running Code....");
 
-            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/run-code`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    code,
+            const response = await axios.post(
+                `${process.env.REACT_APP_BACKEND_URL}/run-code`,
+                {
+                    code: editorRef.current.getValue(),
                     language: lang,
                     input: inputArea?.value
-                })
-            });
+                },
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                    withCredentials: true
+                }
+            );
 
-            const data = await response.json();
+            const data = response.data;
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to compile code');
+            if (data.output) {
+                if (inputArea) {
+                    inputArea.value = data.output;
+                }
+                
+                socketRef.current?.emit(ACTIONS.GET_OUTPUT, { 
+                    roomId, 
+                    output: data.output 
+                });
+                const inputLabel = document.getElementById("inputLabel");
+                const outputLabel = document.getElementById("outputLabel");
+                if (inputLabel && outputLabel) {
+                    inputLabel.classList.remove("clickedLabel");
+                    inputLabel.classList.add("notClickedLabel");
+                    outputLabel.classList.remove("notClickedLabel");
+                    outputLabel.classList.add("clickedLabel");
+                }
             }
-
-            if (inputArea) {
-                inputArea.value = data.output;
-            }
-
-            socketRef.current?.emit(ACTIONS.GET_OUTPUT, { 
-                roomId, 
-                output: data.output 
-            });
 
             toast.dismiss();
             toast.success("Code compilation complete");
 
         } catch (error) {
+            if (error.response) {
+                if (error.response.status === 429) {
+                    toast.error(
+                        'Rate limit exceeded! Please wait 10 seconds before trying again.', 
+                        {
+                            duration: 4000,
+                            icon: '⏳',
+                            style: {
+                                background: 'var(--background-light)',
+                                color: 'var(--text-primary)',
+                                border: '1px solid var(--border-color)',
+                                padding: '12px 16px',
+                                boxShadow: 'var(--shadow-md)'
+                            }
+                        }
+                    );
+                } else {
+                    toast.error(error.response.data.error || 'Failed to compile code', {
+                        duration: 3000,
+                        icon: '❌',
+                        style: {
+                            background: 'var(--background-light)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--error-color)'
+                        }
+                    });
+                }
+            } else {
+                toast.error('Failed to compile code');
+            }
+            
             console.error('Run code error:', error);
             toast.dismiss();
             toast.error(error.message || "Code compilation unsuccessful");

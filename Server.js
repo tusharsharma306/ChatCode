@@ -6,27 +6,49 @@ const CodeShare = require('./models/CodeShare');
 const app = express();
 const http = require('http');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const MONGODB_URI = process.env.MONGODB_URI;
 const PORT = process.env.PORT || 5000;
 const Room = require('./models/Room');
 const axios = require('axios');
+const CustomLRUCache = require('./utils/CustomLRUCache');
+
+const compileLimiter = rateLimit({
+    windowMs: 10 * 1000, 
+    max: 5, 
+    message: { error: 'Too many compilation requests. Please wait 10 seconds and try again.' },
+    standardHeaders: true, 
+    legacyHeaders: false
+});
+
+const shareLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, 
+    max: 10, 
+    message: { error: 'Too many snippet sharing requests. Please wait an hour and try again.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const codeCache = new CustomLRUCache(1000, 3600000);
 
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
-    useUnifiedTopology: true
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000,
+    heartbeatFrequencyMS: 2000,
+    maxPoolSize: 10,
+    socketTimeoutMS: 45000,
+    family: 4
 })
-.then(async () => {
+.then(() => {
     console.log('Connected to MongoDB');
-    const collections = await mongoose.connection.db.collections();
-    for (let collection of collections) {
-        try {
-            await collection.dropIndexes();
-        } catch (error) {
-            console.log(`No indexes to drop for ${collection.collectionName}`);
-        }
-    }
 })
-.catch((err) => console.error('MongoDB connection error:', err));
+.catch((err) => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1); 
+});
+
+
 
 app.use(cors({
     origin: process.env.FRONTEND_URL, 
@@ -83,10 +105,17 @@ async function getRoomById(roomId) {
     }
 }
 
-
+const messageRateLimits = new Map();
+const MESSAGE_POINTS = 3;
+const RATE_LIMIT_RESET = 1000; 
 
 io.on('connection', async (socket) => {
     console.log('socket connected', socket.id);
+
+    messageRateLimits.set(socket.id, {
+        points: MESSAGE_POINTS,
+        lastReset: Date.now()
+    });
 
     socket.on(ACTIONS.JOIN, async ({ roomId, username, sessionId }) => {
         try {
@@ -97,6 +126,7 @@ io.on('connection', async (socket) => {
             if (!room) {
                 room = new Room({
                     roomId,
+                    initialCode: '',
                     users: [{
                         socketId: socket.id,
                         username,
@@ -121,17 +151,17 @@ io.on('connection', async (socket) => {
                         lastActive: new Date()
                     });
                 }
-
-                room.users = room.users.filter(user => {
-                    const disconnectedTime = Date.now() - user.lastActive;
-                    return user.isConnected || disconnectedTime < 24 * 60 * 60 * 1000;
-                });
             }
 
             await room.save();
             socket.join(roomId);
             
-            if (room.initialCode && room.users.length === 1) {
+            const connectedUsers = room.users.filter(u => u.isConnected && u.socketId !== socket.id);
+            if (connectedUsers.length > 0) {
+                socket.to(connectedUsers[0].socketId).emit(ACTIONS.SYNC_CODE, {
+                    socketId: socket.id
+                });
+            } else if (room.initialCode) {
                 socket.emit(ACTIONS.CODE_CHANGE, { code: room.initialCode });
             }
 
@@ -174,8 +204,32 @@ io.on('connection', async (socket) => {
     });
 });
 
+    const checkRateLimit = () => {
+        const now = Date.now();
+        const userLimit = messageRateLimits.get(socket.id);
+        
+        if (!userLimit) return true; 
+        
+        if (now - userLimit.lastReset >= RATE_LIMIT_RESET) {
+            userLimit.points = MESSAGE_POINTS;
+            userLimit.lastReset = now;
+        }
+        
+        if (userLimit.points <= 0) return false;
+        
+        userLimit.points--;
+        return true;
+    };
 
     socket.on(ACTIONS.SEND_MESSAGE, async ({ roomId, message, username }) => {
+        if (!checkRateLimit()) {
+            socket.emit('rateLimitExceeded', {
+                feature: 'Chat',
+                message: 'You are sending messages too fast. Please slow down.'
+            });
+            return;
+        }
+
         try {
             const room = await Room.findOne({ roomId });
             if (!room) return;
@@ -234,8 +288,6 @@ io.on('connection', async (socket) => {
         }, 2000);
     });
 
-    
-
     socket.on(ACTIONS.CURSOR_MOVE, ({ roomId, cursor, username }) => {
         if (cursor && typeof cursor.line === 'number' && typeof cursor.ch === 'number') {
             socket.to(roomId).emit(ACTIONS.CURSOR_MOVE, {
@@ -248,6 +300,8 @@ io.on('connection', async (socket) => {
 
     socket.on('disconnect', async () => {
         try {
+            messageRateLimits.delete(socket.id);
+            
             const user = userSocketMap.get(socket.id);
             if (!user) return;
 
@@ -288,8 +342,7 @@ function generateRandomLink(length = 8) {
     return result;
 }
 
-
-app.post('/run-code', async (req, res) => {
+app.post('/run-code', compileLimiter, async (req, res) => {
     try {
         const { code, language, input } = req.body;
         const defaultInput = "Default input value";
@@ -298,6 +351,11 @@ app.post('/run-code', async (req, res) => {
             return res.status(400).json({ 
                 error: 'Code and language are required' 
             });
+        }
+
+        const cachedResult = codeCache.get(code, language, input || defaultInput);
+        if (cachedResult) {
+            return res.json({ output: cachedResult });
         }
 
         const encodedParams = new URLSearchParams();
@@ -323,6 +381,8 @@ app.post('/run-code', async (req, res) => {
             result = response.data.Errors;
         }
 
+        codeCache.set(code, language, input || defaultInput, result);
+
         res.json({ output: result });
 
     } catch (error) {
@@ -334,8 +394,7 @@ app.post('/run-code', async (req, res) => {
     }
 });
 
-
-app.post('/share', async (req, res) => {
+app.post('/share', shareLimiter, async (req, res) => {
     try {
         const { code, isProtected, password, expiryTime } = req.body;
 

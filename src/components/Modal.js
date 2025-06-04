@@ -11,7 +11,7 @@ const Modal = ({ onClose, code }) => {
     const generateLink = async () => {
         try {
             if (!code) {
-                toast.error('No code to share');
+                toast.error('No code to share!');
                 return;
             }
 
@@ -26,17 +26,34 @@ const Modal = ({ onClose, code }) => {
                 },
                 withCredentials: true
             });
-            
+
             if (response.data.shareLink) {
                 setGeneratedLink(response.data.shareLink);
-                await navigator.clipboard.writeText(response.data.shareLink);
-                toast.success('Link generated and copied to clipboard!');
-            } else {
-                throw new Error('Invalid response from server');
+                toast.success('Share link generated successfully!');
             }
         } catch (error) {
-            console.error('Error generating link:', error);
-            toast.error(error.response?.data?.error || 'Failed to generate share link');
+            if (error.response) {
+                if (error.response.status === 429) {
+                    toast.error(
+                        'Share limit reached! Please wait 1 hour before sharing more code.', 
+                        {
+                            duration: 4000,
+                            icon: '🕒',
+                            style: {
+                                background: 'var(--background-light)',
+                                color: 'var(--text-primary)',
+                                border: '1px solid var(--border-color)',
+                                padding: '12px 16px',
+                                boxShadow: 'var(--shadow-md)'
+                            }
+                        }
+                    );
+                } else {
+                    toast.error(error.response.data.error || 'Failed to generate share link');
+                }
+            } else {
+                toast.error('Failed to generate share link');
+            }
         }
     };
 

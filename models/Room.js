@@ -4,7 +4,8 @@ const roomSchema = new mongoose.Schema({
     roomId: {
         type: String,
         required: true,
-        index: false 
+        unique: true,
+        index: true
     },
     initialCode: {
         type: String
@@ -14,8 +15,7 @@ const roomSchema = new mongoose.Schema({
         username: String,
         sessionId: {
             type: String,
-            required: true,
-            index: false 
+            required: true
         },
         isConnected: {
             type: Boolean,
@@ -27,22 +27,9 @@ const roomSchema = new mongoose.Schema({
         }
     }]
 }, { 
-    timestamps: true,
-    
-    autoIndex: false
+    timestamps: true
 });
 
 const Room = mongoose.model('Room', roomSchema);
-
-async function setupIndexes() {
-    try {
-        await Room.collection.dropIndexes();
-        console.log('Indexes dropped successfully');
-    } catch (error) {
-        console.error('Error dropping indexes:', error);
-    }
-}
-
-setupIndexes();
 
 module.exports = Room;

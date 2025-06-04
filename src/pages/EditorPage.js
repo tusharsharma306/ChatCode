@@ -183,6 +183,33 @@ function EditorPage() {
                     delete typingTimeoutRef.current[username];
                 }, 2000);
             });
+
+            socketRef.current.on('connect_error', (err) => {
+                toast.error('Failed to connect to server');
+            });
+
+            socketRef.current.on('error', ({ message }) => {
+                toast.error(message);
+            });
+
+            socketRef.current.on('rateLimitExceeded', ({ feature, message }) => {
+                toast.error(
+                    `${feature} limit exceeded! Please slow down and try again in a moment.`, 
+                    {
+                        duration: 4000,
+                        icon: '⚠️',
+                        style: {
+                            background: 'var(--background-light)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--text-secondary)',
+                            padding: '12px 16px',
+                            boxShadow: 'var(--shadow-md)',
+                            fontSize: 'var(--font-size-sm)',
+                            fontWeight: '500'
+                        }
+                    }
+                );
+            });
         };
         init();
 
@@ -192,7 +219,34 @@ function EditorPage() {
                 clearTimeout(timeout);
             });
             socketRef.current?.disconnect();
+            socketRef.current?.off('connect_error');
+            socketRef.current?.off('error');
+            socketRef.current?.off('rateLimitExceeded');
         };
+    }, []);
+
+    useEffect(() => {
+        if (socketRef.current) {
+            socketRef.current.on(ACTIONS.GET_OUTPUT, ({ output }) => {
+                const inputArea = document.getElementById("input");
+                if (inputArea) {
+                    inputArea.value = output;
+                }
+                
+                const inputLabel = document.getElementById("inputLabel");
+                const outputLabel = document.getElementById("outputLabel");
+                if (inputLabel && outputLabel) {
+                    inputLabel.classList.remove("clickedLabel");
+                    inputLabel.classList.add("notClickedLabel");
+                    outputLabel.classList.remove("notClickedLabel");
+                    outputLabel.classList.add("clickedLabel");
+                }
+            });
+
+            return () => {
+                socketRef.current.off(ACTIONS.GET_OUTPUT);
+            };
+        }
     }, []);
 
 
