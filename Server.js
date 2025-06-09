@@ -8,7 +8,6 @@ const http = require('http');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const MONGODB_URI = process.env.MONGODB_URI;
-const PORT = process.env.REACT_APP_BACKEND_URL || 5000;
 const Room = require('./models/Room');
 const axios = require('axios');
 const CustomLRUCache = require('./utils/CustomLRUCache');
@@ -538,6 +537,7 @@ app.post('/fork-snippet', async (req, res) => {
     }
 });
 
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });
