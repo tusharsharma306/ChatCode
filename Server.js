@@ -12,6 +12,8 @@ const PORT = process.env.PORT || 5000;
 const Room = require('./models/Room');
 const axios = require('axios');
 const CustomLRUCache = require('./utils/CustomLRUCache');
+const path = require('path');
+
 
 const compileLimiter = rateLimit({
     windowMs: 10 * 1000, 
@@ -69,6 +71,11 @@ const io = new Server(server, {
         credentials: true,
         allowedHeaders: ['Content-Type']
     }
+});
+
+app.use(express.static('build'));
+app.use((req,res,next) => {
+    res.sendFile(path.join(__dirname,'build','index.html'));
 });
 
 const userSocketMap = new Map(); 
