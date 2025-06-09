@@ -64,7 +64,7 @@
     ]
   },
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@babel/plugin-transform-private-property-in-object": "^7.23.4",
     "@types/codemirror": "^5.60.10",
     "nodemon": "^3.0.2",
     "react-error-overlay": "6.0.9"
