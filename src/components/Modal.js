@@ -29,7 +29,23 @@ const Modal = ({ onClose, code }) => {
 
             if (response.data.shareLink) {
                 setGeneratedLink(response.data.shareLink);
-                toast.success('Share link generated successfully!');
+                
+                try {
+                    await navigator.clipboard.writeText(response.data.shareLink);
+                    toast.success('Link generated and copied to clipboard!', {
+                        icon: '📋',
+                        style: {
+                            background: 'var(--background-light)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--success-color)',
+                            padding: '12px 16px',
+                            boxShadow: 'var(--shadow-md)'
+                        }
+                    });
+                } catch (clipboardError) {
+                    toast.success('Link generated! Click to copy.');
+                    console.error('Clipboard error:', clipboardError);
+                }
             }
         } catch (error) {
             if (error.response) {
@@ -54,6 +70,20 @@ const Modal = ({ onClose, code }) => {
             } else {
                 toast.error('Failed to generate share link');
             }
+        }
+    };
+
+    const copyToClipboard = async () => {
+        if (!generatedLink) return;
+        
+        try {
+            await navigator.clipboard.writeText(generatedLink);
+            toast.success('Link copied to clipboard!', {
+                icon: '📋',
+                duration: 2000
+            });
+        } catch (error) {
+            toast.error('Failed to copy link');
         }
     };
 
@@ -93,15 +123,18 @@ const Modal = ({ onClose, code }) => {
                         <option value="7d">7 Days</option>
                     </select>
                 </div>
-                {generatedLink ? (
+                {generatedLink && (
                     <div className="generated-link">
                         <input
                             type="text"
                             value={generatedLink}
                             readOnly
+                            onClick={copyToClipboard}
+                            title="Click to copy"
+                            className="copy-input"
                         />
                     </div>
-                ) : null}
+                )}
                 <div className="modal-buttons">
                     <button className="btn close-btn" onClick={onClose}>
                         Close

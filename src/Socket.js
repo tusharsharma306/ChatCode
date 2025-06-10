@@ -1,4 +1,4 @@
-import {io} from 'socket.io-client';
+import { io } from 'socket.io-client';
 
 export const initSocket = async () => {
     const options = {
@@ -7,7 +7,13 @@ export const initSocket = async () => {
         reconnectionDelay: 1000,
         timeout: 10000,
         transports: ['websocket'],
-        autoConnect: true
+        autoConnect: true,
+        withCredentials: true
     };
-    return io(process.env.REACT_APP_BACKEND_URL, options);
+
+    const BACKEND_URL = process.env.NODE_ENV === 'production'
+        ? window.location.origin  
+        : process.env.REACT_APP_BACKEND_URL;
+
+    return io(BACKEND_URL, options);
 };

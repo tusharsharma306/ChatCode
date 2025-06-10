@@ -151,8 +151,12 @@ const Editor = ({
             
             toast.loading("Running Code....");
 
+            const BACKEND_URL = process.env.NODE_ENV === 'production'
+                ? window.location.origin
+                : process.env.REACT_APP_BACKEND_URL;
+
             const response = await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/run-code`,
+                `${BACKEND_URL}/run-code`,
                 {
                     code: editorRef.current.getValue(),
                     language: lang,

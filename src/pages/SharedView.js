@@ -22,6 +22,10 @@ const SharedView = () => {
     const [timeLeft, setTimeLeft] = useState('');
     const [isExpired, setIsExpired] = useState(false); 
 
+    const BACKEND_URL = process.env.NODE_ENV === 'production'
+        ? window.location.origin
+        : process.env.REACT_APP_BACKEND_URL;
+
     useEffect(() => {
         const updateTimeLeft = () => {
             if (!metadata.expiryTimestamp) return;
@@ -65,7 +69,7 @@ const SharedView = () => {
         const fetchCode = async () => {
             try {
                 const response = await axios.get(
-                    `${process.env.REACT_APP_BACKEND_URL}/share/${linkId}`
+                    `${BACKEND_URL}/share/${linkId}`
                 );
 
                 if (response.data.isProtected) {
@@ -111,7 +115,7 @@ const SharedView = () => {
     const verifyPassword = async () => {
         try {
             const response = await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/share/${linkId}/verify`,
+                `${BACKEND_URL}/share/${linkId}/verify`,
                 { password }
             );
             setCode(response.data.code);
@@ -139,7 +143,7 @@ const SharedView = () => {
             }
 
             const response = await axios.post(
-                `${process.env.REACT_APP_BACKEND_URL}/fork-snippet`,
+                `${BACKEND_URL}/fork-snippet`,
                 { code }
             );
 

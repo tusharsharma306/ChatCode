@@ -13,6 +13,7 @@ const axios = require('axios');
 const CustomLRUCache = require('./utils/CustomLRUCache');
 const path = require('path');
 
+const PORT = process.env.PORT || 5000;
 
 const compileLimiter = rateLimit({
     windowMs: 10 * 1000, 
@@ -51,30 +52,35 @@ mongoose.connect(MONGODB_URI, {
 
 
 
+app.use(express.json());
+
+const FRONTEND_URL = process.env.NODE_ENV === 'production' 
+    ? '*'  // In production, accept all origins since frontend/backend are same origin
+    : 'http://localhost:3000';
+
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+    ? process.env.RENDER_EXTERNAL_URL
+    : 'http://localhost:5000';
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL, 
+    origin: FRONTEND_URL,
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.static('build'));
+
 const { Server } = require('socket.io');
 const ACTIONS = require('./src/pages/Action');
 
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL,
+        origin: FRONTEND_URL,
         methods: ['GET', 'POST'],
-        credentials: true,
-        allowedHeaders: ['Content-Type']
+        credentials: true
     }
-});
-
-app.use(express.static('build'));
-app.use((req,res,next) => {
-    res.sendFile(path.join(__dirname,'build','index.html'));
 });
 
 const userSocketMap = new Map(); 
@@ -359,10 +365,15 @@ app.post('/run-code', compileLimiter, async (req, res) => {
             });
         }
 
-        const cachedResult = codeCache.get(code, language, input || defaultInput);
+        const cacheKey = `${code}-${language}-${input || defaultInput}`;
+        const cachedResult = codeCache.get(cacheKey);
+        
         if (cachedResult) {
+            console.log('Cache hit:', cacheKey);
             return res.json({ output: cachedResult });
         }
+
+        console.log('Cache miss, compiling code...');
 
         const encodedParams = new URLSearchParams();
         encodedParams.append("LanguageChoice", language);
@@ -387,7 +398,8 @@ app.post('/run-code', compileLimiter, async (req, res) => {
             result = response.data.Errors;
         }
 
-        codeCache.set(code, language, input || defaultInput, result);
+        codeCache.set(cacheKey, result);
+        console.log('Stored in cache:', cacheKey);
 
         res.json({ output: result });
 
@@ -537,7 +549,14 @@ app.post('/fork-snippet', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 5000;
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static('build'));
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, 'build', 'index.html'));
+    });
+}
+
+
 server.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });
