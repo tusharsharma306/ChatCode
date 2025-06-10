@@ -54,16 +54,20 @@ mongoose.connect(MONGODB_URI, {
 
 app.use(express.json());
 
-const FRONTEND_URL = process.env.NODE_ENV === 'production' 
+const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
     ? '*'  // In production, accept all origins since frontend/backend are same origin
     : 'http://localhost:3000';
 
+const FRONTEND_URL = process.env.NODE_ENV === 'production'
+    ? 'https://chatcode-6n6e.onrender.com'
+    : 'http://localhost:3000';
+
 const BACKEND_URL = process.env.NODE_ENV === 'production'
-    ? process.env.RENDER_EXTERNAL_URL
+    ? 'https://chatcode-6n6e.onrender.com'
     : 'http://localhost:5000';
 
 app.use(cors({
-    origin: FRONTEND_URL,
+    origin: CORS_ORIGIN,
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -77,7 +81,7 @@ const ACTIONS = require('./src/pages/Action');
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: FRONTEND_URL,
+        origin: CORS_ORIGIN,
         methods: ['GET', 'POST'],
         credentials: true
     }

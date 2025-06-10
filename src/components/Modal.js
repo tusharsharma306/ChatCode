@@ -13,9 +13,11 @@ const Modal = ({ onClose, code }) => {
             if (!code) {
                 toast.error('No code to share!');
                 return;
-            }
-
-            const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/share`, {
+            }            const BACKEND_URL = process.env.NODE_ENV === 'production'
+                ? 'https://chatcode-6n6e.onrender.com'
+                : process.env.REACT_APP_BACKEND_URL;
+            
+            const response = await axios.post(`${BACKEND_URL}/share`, {
                 code: code.trim(), 
                 isProtected,
                 password: isProtected ? password : null,
