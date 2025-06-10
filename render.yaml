@@ -3,7 +3,7 @@ services:
     name: realtime-editor
     env: node
     buildCommand: npm install && npm run build
-    startCommand: npm run build && npm run server:prod
+    startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
