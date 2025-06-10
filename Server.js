@@ -556,7 +556,18 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    process.exit(1);
+});
 
-server.listen(PORT, () => {
-    console.log(`Listening on port ${PORT}`);
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT}`);
+}).on('error', (err) => {
+    console.error('Server failed to start:', err);
+    process.exit(1);
 });
