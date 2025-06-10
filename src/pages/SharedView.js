@@ -22,7 +22,7 @@ const SharedView = () => {
     const [timeLeft, setTimeLeft] = useState('');
     const [isExpired, setIsExpired] = useState(false);    
     const BACKEND_URL = process.env.NODE_ENV === 'production'
-        ? 'https://chatcode-6n6e.onrender.com'
+        ? '' 
         : process.env.REACT_APP_BACKEND_URL;
 
     useEffect(() => {
@@ -66,9 +66,16 @@ const SharedView = () => {
 
     useEffect(() => {
         const fetchCode = async () => {
-            try {
+            try {                
                 const response = await axios.get(
-                    `${BACKEND_URL}/share/${linkId}`
+                    `${BACKEND_URL}/share/${linkId}`,
+                    {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        withCredentials: true
+                    }
                 );
 
                 if (response.data.isProtected) {
@@ -83,7 +90,9 @@ const SharedView = () => {
                     expiryTimestamp: response.data.expiryTimestamp
                 });
             } catch (error) {
+                console.error('Fetch error:', error);
                 if (error.response?.status === 410) {
+                    setIsExpired(true);
                     toast.error('This link has expired');
                 } else {
                     toast.error('Failed to fetch code');
@@ -94,7 +103,7 @@ const SharedView = () => {
         };
 
         fetchCode();
-    }, [linkId]);
+    }, [linkId, BACKEND_URL]);
 
     useEffect(() => {
         if (code) {

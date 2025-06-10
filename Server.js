@@ -58,29 +58,32 @@ if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
 
+const PRODUCTION_URL = process.env.FRONTEND_URL || 'https://chatcode-6n6e.onrender.com';
+
 const CORS_ORIGIN = process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL || 'https://chatcode-6n6e.onrender.com'
-    : 'http://localhost:3000';
+    ? [PRODUCTION_URL, 'https://chatcode-6n6e.onrender.com']
+    : ['http://localhost:3000'];
 
 const FRONTEND_URL = process.env.NODE_ENV === 'production'
-    ? 'https://chatcode-6n6e.onrender.com'
+    ? PRODUCTION_URL
     : 'http://localhost:3000';
 
 const BACKEND_URL = process.env.NODE_ENV === 'production'
-    ? 'https://chatcode-6n6e.onrender.com'
+    ? PRODUCTION_URL
     : 'http://localhost:5000';
 
 app.use(cors({
     origin: function(origin, callback) {
-        if (!origin || origin === CORS_ORIGIN || process.env.NODE_ENV !== 'production') {
+        if (!origin || CORS_ORIGIN.includes(origin)) {
             callback(null, true);
         } else {
+            console.log('Blocked by CORS:', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
 
 const { Server } = require('socket.io');
@@ -91,7 +94,8 @@ const io = new Server(server, {
     cors: {
         origin: CORS_ORIGIN,
         methods: ['GET', 'POST'],
-        credentials: true
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
     }
 });
 
@@ -471,18 +475,32 @@ app.post('/share', shareLimiter, async (req, res) => {
     }
 });
 
-app.get('/share/:linkId', async (req, res) => {
+app.get('/share/:linkId', async (req, res, next) => {
     try {
+        const wantsJson = req.headers.accept && req.headers.accept.includes('application/json');
+        
         const { linkId } = req.params;
         const codeShare = await CodeShare.findOne({ linkId });
 
         if (!codeShare) {
-            return res.status(404).json({ error: 'Link not found' });
+            if (wantsJson) {
+                return res.status(404).json({ error: 'Link not found' });
+            }
+            return next();
         }
 
         if (Date.now() > codeShare.expiryTimestamp) {
-            return res.status(410).json({ error: 'Link expired' });
-        }        if (codeShare.isProtected) {
+            if (wantsJson) {
+                return res.status(410).json({ error: 'Link expired' });
+            }
+            return next();
+        }
+
+        if (!wantsJson) {
+            return next();
+        }
+
+        if (codeShare.isProtected) {
             return res.json({ 
                 isProtected: true,
                 createdAt: codeShare.createdAt,
@@ -497,7 +515,12 @@ app.get('/share/:linkId', async (req, res) => {
             expiryTimestamp: codeShare.expiryTimestamp
         });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch Code' });
+        console.error('Share route error:', error);
+        if (req.headers.accept?.includes('application/json')) {
+            res.status(500).json({ error: 'Failed to fetch Code' });
+        } else {
+            next();
+        }
     }
 });
 
@@ -559,15 +582,17 @@ app.post('/fork-snippet', async (req, res) => {
     }
 });
 
-app.use(express.static('build'));
-if (process.env.NODE_ENV === 'production') {
-    app.get(['/', '/editor/*', '/share/*'], (req, res) => {
-        if (req.path.startsWith('/share/') && !req.path.includes('verify') && !req.accepts('html')) {
-            return next();
-        }
-        res.sendFile(path.join(__dirname, 'build', 'index.html'));
-    });
-}
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'build')));
+
+// The "catch all" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get(['/', '/editor/*', '/share/*'], (req, res, next) => {
+    if (req.path.startsWith('/share/') && req.path.endsWith('.json')) {
+        return next();
+    }
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
