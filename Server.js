@@ -54,8 +54,12 @@ mongoose.connect(MONGODB_URI, {
 
 app.use(express.json());
 
-const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
-    ? '*'  
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
+const CORS_ORIGIN = process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || 'https://chatcode-6n6e.onrender.com'
     : 'http://localhost:3000';
 
 const FRONTEND_URL = process.env.NODE_ENV === 'production'
@@ -67,7 +71,13 @@ const BACKEND_URL = process.env.NODE_ENV === 'production'
     : 'http://localhost:5000';
 
 app.use(cors({
-    origin: CORS_ORIGIN,
+    origin: function(origin, callback) {
+        if (!origin || origin === CORS_ORIGIN || process.env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -550,18 +560,12 @@ app.post('/fork-snippet', async (req, res) => {
 });
 
 app.use(express.static('build'));
-
 if (process.env.NODE_ENV === 'production') {
-    app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/share/') && !req.path.includes('verify')) {
-            if (req.accepts('html')) {
-                res.sendFile(path.join(__dirname, 'build', 'index.html'));
-            } else {
-                next();
-            }
-        } else {
-            res.sendFile(path.join(__dirname, 'build', 'index.html'));
+    app.get(['/', '/editor/*', '/share/*'], (req, res) => {
+        if (req.path.startsWith('/share/') && !req.path.includes('verify') && !req.accepts('html')) {
+            return next();
         }
+        res.sendFile(path.join(__dirname, 'build', 'index.html'));
     });
 }
 
