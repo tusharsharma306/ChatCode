@@ -20,10 +20,9 @@ const SharedView = () => {
         expiryTimestamp: null
     });
     const [timeLeft, setTimeLeft] = useState('');
-    const [isExpired, setIsExpired] = useState(false); 
-
+    const [isExpired, setIsExpired] = useState(false);    
     const BACKEND_URL = process.env.NODE_ENV === 'production'
-        ? window.location.origin
+        ? 'https://chatcode-6n6e.onrender.com'
         : process.env.REACT_APP_BACKEND_URL;
 
     useEffect(() => {

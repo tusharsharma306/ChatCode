@@ -148,11 +148,9 @@ const Editor = ({
             const lang = document.querySelector(".header-select").value;
             const inputArea = document.querySelector(".inputArea");
             const code = editorRef.current.getValue();
-            
-            toast.loading("Running Code....");
-
+              toast.loading("Running Code....");
             const BACKEND_URL = process.env.NODE_ENV === 'production'
-                ? window.location.origin
+                ? 'https://chatcode-6n6e.onrender.com'
                 : process.env.REACT_APP_BACKEND_URL;
 
             const response = await axios.post(
