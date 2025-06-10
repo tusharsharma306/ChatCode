@@ -73,8 +73,6 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.static('build'));
-
 const { Server } = require('socket.io');
 const ACTIONS = require('./src/pages/Action');
 
@@ -551,10 +549,19 @@ app.post('/fork-snippet', async (req, res) => {
     }
 });
 
+app.use(express.static('build'));
+
 if (process.env.NODE_ENV === 'production') {
-    app.use(express.static('build'));
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, 'build', 'index.html'));
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/share/') && !req.path.includes('verify')) {
+            if (req.accepts('html')) {
+                res.sendFile(path.join(__dirname, 'build', 'index.html'));
+            } else {
+                next();
+            }
+        } else {
+            res.sendFile(path.join(__dirname, 'build', 'index.html'));
+        }
     });
 }
 
