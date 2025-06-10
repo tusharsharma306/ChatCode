@@ -3,11 +3,15 @@ services:
     name: realtime-editor
     env: node
     buildCommand: npm install && npm run build
-    startCommand: npm run start
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: RAPID_API_KEY
+        sync: false
     healthCheckPath: /
     autoDeploy: true

@@ -567,6 +567,8 @@ process.on('unhandledRejection', (err) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log(`Frontend URL: ${FRONTEND_URL}`);
 }).on('error', (err) => {
     console.error('Server failed to start:', err);
     process.exit(1);
