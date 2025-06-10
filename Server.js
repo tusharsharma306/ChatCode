@@ -55,7 +55,7 @@ mongoose.connect(MONGODB_URI, {
 app.use(express.json());
 
 const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
-    ? '*'  // In production, accept all origins since frontend/backend are same origin
+    ? '*'  
     : 'http://localhost:3000';
 
 const FRONTEND_URL = process.env.NODE_ENV === 'production'
@@ -449,12 +449,10 @@ app.post('/share', shareLimiter, async (req, res) => {
             isProtected,
             password: isProtected ? await bcrypt.hash(password, 10) : null,
             expiryTimestamp
-        });
-
-        await codeShare.save();
+        });        await codeShare.save();
 
         res.json({
-            shareLink: `${process.env.FRONTEND_URL}/share/${linkId}`
+            shareLink: `${FRONTEND_URL}/share/${linkId}`
         });
     } catch (error) {
         console.error('API Error:', error);

@@ -13,5 +13,7 @@ services:
         sync: false
       - key: RAPID_API_KEY
         sync: false
+      - key: FRONTEND_URL
+        value: https://chatcode-6n6e.onrender.com
     healthCheckPath: /
     autoDeploy: true
