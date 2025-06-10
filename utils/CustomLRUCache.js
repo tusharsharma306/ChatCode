@@ -4,7 +4,7 @@ class CustomLRUCache {
         this.ttl = ttl;
         this.cache = new Map();
         // this.debug = process.env.NODE_ENV === 'development';
-        this.debug = true;
+        this.debug = false;
     }
 
     getKey(code, language, input) {

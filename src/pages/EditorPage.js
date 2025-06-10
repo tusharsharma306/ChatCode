@@ -49,7 +49,11 @@ function EditorPage() {
             
             socketRef.current.on('connect', () => {
                 if (reconnectingRef.current) {
-                    toast.success('Reconnected successfully');
+                    toast.dismiss('reconnect-toast');
+                    toast.success('Reconnected successfully', {
+                        duration: 3000,
+                        icon: '🔄'
+                    });
                     reconnectingRef.current = false;
                 }
                 
@@ -63,12 +67,20 @@ function EditorPage() {
 
             socketRef.current.io.on('reconnect_attempt', (attempt) => {
                 if (attempt === 1) {
-                    toast.loading('Attempting to reconnect...', { id: 'reconnect-toast' });
+                    toast.loading('Attempting to reconnect...', { 
+                        id: 'reconnect-toast',
+                        duration: Infinity 
+                    });
+                    reconnectingRef.current = true;
                 }
             });
 
             socketRef.current.io.on('reconnect_error', () => {
-                toast.error('Failed to reconnect. Still trying...', { id: 'reconnect-toast' });
+                toast.dismiss('reconnect-toast');
+                toast.error('Failed to reconnect. Still trying...', { 
+                    id: 'reconnect-toast',
+                    duration: 3000
+                });
             });
 
             socketRef.current.emit(ACTIONS.JOIN, {
@@ -81,7 +93,8 @@ function EditorPage() {
             socketRef.current.on('disconnect', () => {
                 reconnectingRef.current = true;
                 toast.error('Connection lost. Attempting to reconnect...', {
-                    id: 'disconnect-toast'
+                    id: 'disconnect-toast',
+                    duration: 3000
                 });
             });
 
@@ -214,6 +227,9 @@ function EditorPage() {
         init();
 
         return () => {
+            toast.dismiss('reconnect-toast');
+            toast.dismiss('disconnect-toast');
+            
             localStorage.removeItem('sessionId');
             Object.values(typingTimeoutRef.current).forEach(timeout => {
                 clearTimeout(timeout);
