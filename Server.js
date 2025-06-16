@@ -99,108 +99,131 @@ const io = new Server(server, {
     }
 });
 
-const userSocketMap = new Map(); 
-
-async function getAllConnectedClients(roomId) {
-    try {
-        const room = await Room.findOne({ roomId });
-        if (!room) return [];
-        
-        const uniqueUsers = room.users.reduce((acc, user) => {
-            if (user.isConnected && (!acc[user.sessionId] || user.lastActive > acc[user.sessionId].lastActive)) {
-                acc[user.sessionId] = user;
-            }
-            return acc;
-        }, {});
-
-        return Object.values(uniqueUsers).map(user => ({
-            socketId: user.socketId,
-            username: user.username,
-            role: user.role
-        }));
-    } catch (error) {
-        console.error('Error getting connected clients:', error);
-        return [];
-    }
-}
-
-async function getRoomById(roomId) {
-    try {
-        return await Room.findOne({ roomId });
-    } catch (error) {
-        console.error('Error getting room:', error);
-        return null;
-    }
-}
-
-const messageRateLimits = new Map();
-const MESSAGE_POINTS = 3;
-const RATE_LIMIT_RESET = 1000; 
-
-io.on('connection', async (socket) => {
-    console.log('socket connected', socket.id);
-
-    messageRateLimits.set(socket.id, {
-        points: MESSAGE_POINTS,
-        lastReset: Date.now()
+io.on('connection', (socket) => {
+    socket.on(ACTIONS.FORK, async ({ code, username, sessionId }) => {
+        try {
+            const roomId = `${Math.random().toString(36).slice(2, 7)}`;
+            
+            const room = new Room({
+                roomId,
+                initialCode: code,
+                users: [{
+                    socketId: socket.id,
+                    username,
+                    sessionId,
+                    isConnected: true
+                }]
+            });
+            
+            await room.save();
+            
+            socket.emit(ACTIONS.FORK, { roomId });
+        } catch (error) {
+            console.error('Fork error:', error);
+            socket.emit('error', { message: 'Failed to fork snippet' });
+        }
     });
 
-    socket.on(ACTIONS.JOIN, async ({ roomId, username, sessionId }) => {
+    const userSocketMap = new Map(); 
+
+    async function getAllConnectedClients(roomId) {
+        try {
+            const room = await Room.findOne({ roomId });
+            if (!room) return [];
+            const activeSocketIds = new Set(Array.from(io.sockets.sockets.keys()));
+            
+            const uniqueUsers = new Map();
+            
+            room.users
+                .filter(user => user.isConnected && activeSocketIds.has(user.socketId))
+                .forEach(user => {
+                    if (!uniqueUsers.has(user.username) || 
+                        user.lastActive > uniqueUsers.get(user.username).lastActive) {
+                        uniqueUsers.set(user.username, user);
+                    }
+                });
+
+            return Array.from(uniqueUsers.values()).map(user => ({
+                socketId: user.socketId,
+                username: user.username,
+                sessionId: user.sessionId
+            }));
+        } catch (error) {
+            console.error('Error getting connected clients:', error);
+            return [];
+        }
+    }
+
+    async function getRoomById(roomId) {
+        try {
+            return await Room.findOne({ roomId });
+        } catch (error) {
+            console.error('Error getting room:', error);
+            return null;
+        }
+    }
+
+    const messageRateLimits = new Map();
+    const MESSAGE_POINTS = 3;
+    const RATE_LIMIT_RESET = 1000; 
+
+    socket.on(ACTIONS.JOIN, async ({ roomId, username, sessionId, isReconnecting }) => {
         try {
             const userSessionId = sessionId || socket.id;
-            
             let room = await Room.findOne({ roomId });
             
             if (!room) {
                 room = new Room({
                     roomId,
                     initialCode: '',
-                    users: [{
-                        socketId: socket.id,
-                        username,
-                        sessionId: userSessionId,
-                        isConnected: true,
-                        lastActive: new Date()
-                    }]
+                    users: []
                 });
-            } else {
-                const existingUserIndex = room.users.findIndex(u => u.sessionId === userSessionId);
-                if (existingUserIndex !== -1) {
-                    room.users[existingUserIndex].socketId = socket.id;
-                    room.users[existingUserIndex].isConnected = true;
-                    room.users[existingUserIndex].lastActive = new Date();
-                    room.users[existingUserIndex].username = username;
-                } else {
-                    room.users.push({
-                        socketId: socket.id,
-                        username,
-                        sessionId: userSessionId,
-                        isConnected: true,
-                        lastActive: new Date()
-                    });
-                }
             }
+
+            room.users = room.users.map(user => {
+                if (user.username === username && user.socketId !== socket.id) {
+                    user.isConnected = false;
+                }
+                return user;
+            });
+
+            room.users = room.users.filter(user => 
+                !(user.sessionId === userSessionId && user.socketId === socket.id)
+            );
+
+            room.users.push({
+                socketId: socket.id,
+                username,
+                sessionId: userSessionId,
+                isConnected: true,
+                lastActive: new Date()
+            });
 
             await room.save();
             socket.join(roomId);
             
-            const connectedUsers = room.users.filter(u => u.isConnected && u.socketId !== socket.id);
-            if (connectedUsers.length > 0) {
-                socket.to(connectedUsers[0].socketId).emit(ACTIONS.SYNC_CODE, {
-                    socketId: socket.id
-                });
-            } else if (room.initialCode) {
-                socket.emit(ACTIONS.CODE_CHANGE, { code: room.initialCode });
-            }
-
-            userSocketMap.set(socket.id, { username, roomId });
+            userSocketMap.set(socket.id, { 
+                username, 
+                roomId, 
+                sessionId: userSessionId 
+            });
             
             const clients = await getAllConnectedClients(roomId);
-            io.to(roomId).emit(ACTIONS.JOINED, {
+            
+            io.in(roomId).emit(ACTIONS.JOINED, {
                 clients,
                 username,
                 socketId: socket.id
             });
+
+            if (clients.length > 1 && !isReconnecting) {
+                const otherUser = clients.find(u => u.socketId !== socket.id);
+                if (otherUser) {
+                    socket.to(otherUser.socketId).emit(ACTIONS.SYNC_CODE, {
+                        socketId: socket.id
+                    });
+                }
+            }
         } catch (error) {
             console.error('JOIN error:', error);
             socket.emit('error', { message: 'Failed to join room' });
@@ -335,20 +358,25 @@ io.on('connection', async (socket) => {
 
             const room = await Room.findOne({ roomId: user.roomId });
             if (room) {
-                const userIndex = room.users.findIndex(u => u.socketId === socket.id);
-                if (userIndex !== -1) {
-                    room.users[userIndex].isConnected = false;
-                    room.users[userIndex].lastActive = new Date();
-                    await room.save();
-                }
+                room.users = room.users.map(u => {
+                    if (u.socketId === socket.id && u.sessionId === user.sessionId) {
+                        u.isConnected = false;
+                        u.lastActive = new Date();
+                    }
+                    return u;
+                });
+                await room.save();
+
+                userSocketMap.delete(socket.id);
+
+                const clients = await getAllConnectedClients(user.roomId);
+                
+                socket.to(user.roomId).emit(ACTIONS.DISCONNECTED, {
+                    socketId: socket.id,
+                    username: user.username,
+                    clients
+                });
             }
-
-            userSocketMap.delete(socket.id);
-            io.to(user.roomId).emit(ACTIONS.DISCONNECTED, {
-                socketId: socket.id,
-                username: user.username
-            });
-
         } catch (error) {
             console.error('Disconnect error:', error);
         }

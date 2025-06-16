@@ -40,6 +40,12 @@ function EditorPage() {
         return newId;
     });
     const reconnectingRef = useRef(false);
+    
+    useEffect(() => {
+        if (location.state?.forkedCode) {
+            codeRef.current = location.state.forkedCode;
+        }
+    }, [location.state]);
 
     const navigate = useNavigate();
 
@@ -54,66 +60,40 @@ function EditorPage() {
                         duration: 3000,
                         icon: '🔄'
                     });
-                    reconnectingRef.current = false;
                 }
-                
                 socketRef.current.emit(ACTIONS.JOIN, {
                     roomId,
                     username: location.state?.username,
                     sessionId,
-                    isReconnecting: true
+                    isReconnecting: reconnectingRef.current
                 });
-            });
-
-            socketRef.current.io.on('reconnect_attempt', (attempt) => {
-                if (attempt === 1) {
-                    toast.loading('Attempting to reconnect...', { 
-                        id: 'reconnect-toast',
-                        duration: Infinity 
-                    });
-                    reconnectingRef.current = true;
-                }
-            });
-
-            socketRef.current.io.on('reconnect_error', () => {
-                toast.dismiss('reconnect-toast');
-                toast.error('Failed to reconnect. Still trying...', { 
-                    id: 'reconnect-toast',
-                    duration: 3000
-                });
-            });
-
-            socketRef.current.emit(ACTIONS.JOIN, {
-                roomId,
-                username: location.state?.username,
-                sessionId,
-                isReconnecting: false
-            });
-
-            socketRef.current.on('disconnect', () => {
-                reconnectingRef.current = true;
-                toast.error('Connection lost. Attempting to reconnect...', {
-                    id: 'disconnect-toast',
-                    duration: 3000
-                });
+                
+                reconnectingRef.current = false;
             });
 
             socketRef.current.on(ACTIONS.JOINED, ({ clients, username, socketId }) => {
                 if (username !== location.state?.username) {
-                    toast.success(`${username} joined the room`);
+                    toast.success(`${username} joined the room`, {
+                        id: `join-${username}`, 
+                        duration: 2000
+                    });
                 }
                 setClients(clients);
-                socketRef.current.emit(ACTIONS.SYNC_CODE, {
-                    code: codeRef.current,
-                    socketId,
-                });
+                
+                if (!reconnectingRef.current) {
+                    socketRef.current.emit(ACTIONS.SYNC_CODE, {
+                        code: codeRef.current,
+                        socketId,
+                    });
+                }
             });
 
-            socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
-                toast.success(`${username} left the room.`);
-                setClients((prev) => {
-                    return prev.filter(client => client.socketId !== socketId);
+            socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username, clients }) => {
+                toast.success(`${username} left the room`, {
+                    id: `leave-${username}`,
+                    duration: 2000
                 });
+                setClients(clients);
             });
 
             //Listening for message
@@ -198,7 +178,11 @@ function EditorPage() {
             });
 
             socketRef.current.on('connect_error', (err) => {
-                toast.error('Failed to connect to server');
+                reconnectingRef.current = true;
+                toast.error('Connection error, attempting to reconnect...', {
+                    id: 'reconnect-toast',
+                    duration: 3000
+                });
             });
 
             socketRef.current.on('error', ({ message }) => {
@@ -229,15 +213,11 @@ function EditorPage() {
         return () => {
             toast.dismiss('reconnect-toast');
             toast.dismiss('disconnect-toast');
-            
-            localStorage.removeItem('sessionId');
-            Object.values(typingTimeoutRef.current).forEach(timeout => {
-                clearTimeout(timeout);
-            });
-            socketRef.current?.disconnect();
-            socketRef.current?.off('connect_error');
-            socketRef.current?.off('error');
-            socketRef.current?.off('rateLimitExceeded');
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current.off('connect');
+                socketRef.current.off('connect_error');
+            }
         };
     }, []);
 

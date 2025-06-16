@@ -4,6 +4,8 @@ import axios from 'axios';
 import CodeMirror from 'codemirror';
 import toast from 'react-hot-toast';
 import moment from 'moment';
+import ACTIONS from './Action';
+import { initSocket } from '../Socket';
 
 const SharedView = () => {
     const { linkId } = useParams();
@@ -141,28 +143,40 @@ const SharedView = () => {
         if (e.key === 'Enter') {
             verifyPassword();
         }
-    };
-    
-    const handleForkSnippet = async () => {
+    };    const handleForkSnippet = async () => {
         try {
             if (!forkUsername.trim()) {
                 toast.error('Username is required');
                 return;
             }
 
-            const response = await axios.post(
-                `${BACKEND_URL}/fork-snippet`,
-                { code }
-            );
-
-            const { roomId } = response.data;
-            navigate(`/editor/${roomId}`, {
-                state: {
-                    username: forkUsername
-                }
-            });
+            const socket = await initSocket();
+            const sessionId = Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('sessionId', sessionId);
             
-            toast.success('Successfully forked snippet!');
+            socket.emit(ACTIONS.FORK, {
+                code,
+                username: forkUsername,
+                sessionId
+            });
+
+            socket.on(ACTIONS.FORK, ({ roomId }) => {
+                navigate(`/editor/${roomId}`, {
+                    state: {
+                        username: forkUsername,
+                        sessionId,
+                        forkedCode: code
+                    }
+                });
+                socket.disconnect();
+                toast.success('Successfully forked snippet!');
+            });
+
+            socket.on('error', (error) => {
+                console.error('Fork error:', error);
+                toast.error(error.message || 'Failed to fork snippet');
+                socket.disconnect();
+            });
         } catch (error) {
             console.error('Fork error:', error);
             toast.error('Failed to fork snippet');
